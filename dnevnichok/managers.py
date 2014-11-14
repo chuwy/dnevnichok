@@ -44,7 +44,8 @@ class FileManager:
             os.chdir(self.curpath)
 
     def get_items(self):
-        filelist = os.listdir(self.curpath)
+        check = lambda f: os.path.isdir(f) and not f.startswith('.') or f.endswith('.rst')
+        filelist = list(filter(check, os.listdir(self.curpath)))
         if self.curpath != self.root_path:
             filelist.insert(0, '..')
         return [{'title': f, 'full_path': f} for f in filelist]
