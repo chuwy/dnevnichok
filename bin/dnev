@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+
+import curses
+import os
+import locale
+import logging
+import subprocess
+
+from dnevnichok.aux import EventQueue
+from dnevnichok.helpers import get_config
+from dnevnichok.managers import FileManager, TagManager
+from dnevnichok.ui import ItemList
+
+locale.setlocale(locale.LC_ALL, '')
+code = locale.getpreferredencoding()
+
+logging.basicConfig(filename='noter.log')
+
+
+class App:
+    def __init__(self, stdscr):
+        self.stdscr = stdscr
+        self.stdscr.clear()
+        stdscr_y, stdscr_x = self.stdscr.getmaxyx()
+        self.menu_y = (stdscr_y - 3) - 1
+        self.subwin = self.stdscr.subwin(stdscr_y - 3, stdscr_x, 0, 0)
+        curses.curs_set(0)
+        if curses.has_colors():
+            curses.init_pair(1, curses.COLOR_BLUE, 0)
+            curses.init_pair(2, curses.COLOR_CYAN, 0)
+            curses.init_pair(3, curses.COLOR_GREEN, 0)
+            curses.init_pair(4, curses.COLOR_MAGENTA, 0)
+            curses.init_pair(5, curses.COLOR_RED, 0)
+            curses.init_pair(6, curses.COLOR_YELLOW, 0)
+            curses.init_pair(7, curses.COLOR_WHITE, 0)
+
+        self.file_manager = FileManager(os.path.abspath(os.path.expanduser(config.get('Paths', 'notes'))))
+        self.tag_manager = TagManager(os.path.abspath(os.path.expanduser(config.get('Paths', 'db'))))
+        self.manager = self.file_manager        # current manager
+
+        fs = self.manager.get_items()
+        self.left_pane = ItemList(self.subwin, fs)
+        self.left_pane.render()
+        self.keyloop()
+
+    def keyloop(self):
+        while True:
+            ev = EventQueue.pop()
+            if ev[0] == 'root':
+                self.manager.root()
+                items = self.manager.get_items()
+                self.left_pane.switch_items(items)
+            elif ev[0] == 'open' and ev[1]['full_path'] == '..' or ev[0] == 'parent':
+                last_active = self.manager.parent()
+                if not last_active:
+                    continue
+                items = self.manager.get_items()
+                last_active_index = items.index({'full_path': last_active, 'title': last_active})
+                self.left_pane.switch_items(items, last_active_index)
+            elif ev[0] == 'open':
+                path = ev[1]['full_path']
+                title = ev[1]['title']
+                if os.path.isdir(path):
+                    self.manager.chpath(path)
+                    dir_items = self.manager.get_items()
+                    self.left_pane.switch_items(dir_items)
+                else:
+                    if path.endswith('.rst'):
+                        subprocess.call(["vi", path])
+                        self.manager.chpath('.')
+                        items = self.manager.get_items()
+                        self.left_pane.switch_items(items)
+                        curses.curs_set(0)
+                    else:
+                        self.manager.chpath(path)
+                        items = self.manager.get_items()
+                        self.left_pane.switch_items(items)
+
+            c = self.stdscr.get_wch()
+            self.left_pane.process_keypress(c)
+            if type(c) is str:
+                if c in 'r':
+                    from dnevnichok.populate import repopulate_db
+                    repopulate_db()
+                if c in 'QqЙй':
+                    break
+                elif c in 'f':
+                    if self.manager is self.file_manager:
+                        continue
+                    self.manager = self.file_manager
+                    EventQueue.push(('root',))
+                elif c in 't':
+                    if self.manager is self.tag_manager:
+                        continue
+                    self.manager = self.tag_manager
+                    EventQueue.push(('root',))
+                elif c in '/':
+                    curses.echo()
+                    mysearch = self.stdscr.getstr(self.menu_y, 2).decode('unicode_escape')
+                    self.left_pane.switch_items(list(filter(lambda q: q['title'].find(mysearch) >= 0, self.manager.get_items())))
+                    curses.noecho()
+                    self.clear_menu()
+            else:
+                pass
+
+    def clear_menu(self):
+        self.stdscr.move(self.menu_y, 0)
+        self.stdscr.clrtoeol()
+        self.stdscr.move(self.menu_y + 1, 0)
+        self.stdscr.clrtoeol()
+
+
+if __name__ == '__main__':
+    config = get_config()
+    curses.wrapper(App)

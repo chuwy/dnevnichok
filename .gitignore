@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__
+test.db
+noter.log
+*.pyc
+dnevnichok.egg-info
