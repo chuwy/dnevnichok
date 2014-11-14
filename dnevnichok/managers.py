@@ -86,3 +86,22 @@ class TagManager:
         if tag == '.':
             return
         self.curpath = tag
+
+
+class AllManager:
+    def __init__(self, dbpath):
+        self.conn = sqlite3.connect(dbpath)
+        self.curpath = '..'
+
+    def get_items(self):
+        with self.conn:
+            cur = self.conn.cursor()
+            cur.execute("SELECT title, full_path FROM notes")
+            rows = cur.fetchall()
+            return [{'title': t[0], 'full_path': t[1]} for t in rows]
+
+    def root(self): pass
+
+    def parent(self): pass
+
+    def chpath(self, tag): pass

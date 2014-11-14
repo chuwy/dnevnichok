@@ -62,7 +62,7 @@ class ItemList:
         elif i < 0 and self.cur_item == 0 and self._items.has_prev():
             self.cur_item = self.length-1
             self._items.prev()
-            self.render(self.cur_item)
+            self.render()
 
     def move_to(self, i):
         if i < 0:
