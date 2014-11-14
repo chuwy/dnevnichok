@@ -15,7 +15,7 @@ class ItemList:
         self.cur_item = 0
         self._items = PagedItems(items, self.Y)
         self.length = len(self._items)
-        self.width = 50
+        self.width = self.X
 
     def render(self):
         """ Render new state """
@@ -27,10 +27,15 @@ class ItemList:
             else: self.render_item(i, item)
 
     def render_item(self, position, item, reverse=False):
+        def polute(s):
+            l = self.width - len(s)
+            if l > 0:
+                s = s + ' ' * (l-2)
+                return s
         if reverse:
-            self.scr.addstr(position, 0, item['title'][:self.width], curses.A_REVERSE)
+            self.scr.addstr(position, 0, polute(item['title'][:self.width]), curses.A_REVERSE)
         else:
-            self.scr.addstr(position, 0, item['title'][:self.width])
+            self.scr.addstr(position, 0, polute(item['title'][:self.width]))
         self.scr.refresh()
 
     def switch_items(self, items, cur_item=0):
@@ -76,6 +81,7 @@ class ItemList:
                 self.move(-1)
             elif c == curses.KEY_DOWN:
                 self.move(1)
+            else: return False
         elif type(c) is str:
             if c in 'lд':
                 EventQueue.push(('open', self._items[self.cur_item],))
@@ -87,5 +93,6 @@ class ItemList:
                 self.move(1)
             elif c in 'G':
                 self.move_to(-1)
-            else:
-                pass
+            else: return False
+        else: return False
+        return True

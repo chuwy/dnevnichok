@@ -42,9 +42,9 @@ class App:
         fs = self.manager.get_items()
         self.left_pane = ItemList(self.subwin, fs)
         self.left_pane.render()
-        self.keyloop()
+        self.loop()
 
-    def keyloop(self):
+    def loop(self):
         while True:
             ev = EventQueue.pop()
             if ev[0] == 'root':
@@ -71,43 +71,46 @@ class App:
                         self.manager.chpath('.')
                         items = self.manager.get_items()
                         self.left_pane.switch_items(items)
-                        curses.curs_set(0)
                     else:
                         self.manager.chpath(path)
                         items = self.manager.get_items()
                         self.left_pane.switch_items(items)
 
             c = self.stdscr.get_wch()
-            self.left_pane.process_keypress(c)
-            if type(c) is str:
-                if c in 'r':
-                    from dnevnichok.populate import repopulate_db
-                    repopulate_db()
-                if c in 'QqЙй':
-                    break
-                elif c in 'f':
-                    if self.manager is self.file_manager:
-                        continue
-                    self.manager = self.file_manager
-                    EventQueue.push(('root',))
-                elif c in 'a':
-                    if self.manager is self.all_manager:
-                        continue
-                    self.manager = self.all_manager
-                    EventQueue.push(('root',))
-                elif c in 't':
-                    if self.manager is self.tag_manager:
-                        continue
-                    self.manager = self.tag_manager
-                    EventQueue.push(('root',))
-                elif c in '/':
-                    curses.echo()
-                    mysearch = self.stdscr.getstr(self.menu_y, 2).decode('unicode_escape')
-                    self.left_pane.switch_items(list(filter(lambda q: q['title'].find(mysearch) >= 0, self.manager.get_items())))
-                    curses.noecho()
-                    self.clear_menu()
-            else:
-                pass
+            # Who's gonna process it?
+            if not self.left_pane.process_keypress(c): self.process_keypress(c)
+
+    def process_keypress(self, c):
+        if type(c) is not str:
+            return
+        if c in 'r':
+            from dnevnichok.populate import repopulate_db
+            repopulate_db()
+        elif c in 'QqЙй':
+            import sys
+            sys.exit(0)
+        elif c in 'f':
+            if self.manager is self.file_manager:
+                return
+            self.manager = self.file_manager
+            EventQueue.push(('root',))
+        elif c in 'a':
+            if self.manager is self.all_manager:
+                return
+            self.manager = self.all_manager
+            EventQueue.push(('root',))
+        elif c in 't':
+            if self.manager is self.tag_manager:
+                return
+            self.manager = self.tag_manager
+            EventQueue.push(('root',))
+        elif c in '/':
+            curses.echo()
+            mysearch = self.stdscr.getstr(self.menu_y, 2).decode('unicode_escape')
+            self.left_pane.switch_items(list(filter(lambda q: q['title'].find(mysearch) >= 0, self.manager.get_items())))
+            curses.noecho()
+            self.clear_menu()
+
 
     def clear_menu(self):
         self.stdscr.move(self.menu_y, 0)
