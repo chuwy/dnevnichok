@@ -2,6 +2,7 @@
 
 import curses
 import os
+import sys
 import locale
 import logging
 import subprocess
@@ -9,7 +10,7 @@ import subprocess
 from dnevnichok.aux import EventQueue
 from dnevnichok.helpers import get_config
 from dnevnichok.managers import AllManager, FileManager, TagManager
-from dnevnichok.ui import ItemList
+from dnevnichok.ui import ItemList, MainWindow
 
 locale.setlocale(locale.LC_ALL, '')
 code = locale.getpreferredencoding()
@@ -18,107 +19,108 @@ logging.basicConfig(filename='noter.log')
 
 
 class App:
+    """ App manages main window, managers, process events from underlying UI"""
     def __init__(self, stdscr):
-        self.stdscr = stdscr
-        self.stdscr.clear()
-        stdscr_y, stdscr_x = self.stdscr.getmaxyx()
-        self.menu_y = (stdscr_y - 3) - 1
-        self.subwin = self.stdscr.subwin(stdscr_y - 3, stdscr_x, 0, 0)
-        curses.curs_set(0)
-        if curses.has_colors():
-            curses.init_pair(1, curses.COLOR_BLUE, 0)
-            curses.init_pair(2, curses.COLOR_CYAN, 0)
-            curses.init_pair(3, curses.COLOR_GREEN, 0)
-            curses.init_pair(4, curses.COLOR_MAGENTA, 0)
-            curses.init_pair(5, curses.COLOR_RED, 0)
-            curses.init_pair(6, curses.COLOR_YELLOW, 0)
-            curses.init_pair(7, curses.COLOR_WHITE, 0)
-
         self.file_manager = FileManager(os.path.abspath(os.path.expanduser(config.get('Paths', 'notes'))))
         self.tag_manager = TagManager(os.path.abspath(os.path.expanduser(config.get('Paths', 'db'))))
         self.all_manager = AllManager(os.path.abspath(os.path.expanduser(config.get('Paths', 'db'))))
         self.manager = self.file_manager        # current manager
-
-        fs = self.manager.get_items()
-        self.left_pane = ItemList(self.subwin, fs)
-        self.left_pane.render()
+        items = self.manager.get_items()
+        self.window = MainWindow(stdscr)
+        self.window.show_items(items)
+        self.processors = {'open': self.process_open,
+                           'root': self.process_root,
+                           'parent': self.process_parent}
         self.loop()
 
     def loop(self):
         while True:
             ev = EventQueue.pop()
-            if ev[0] == 'root':
-                self.manager.root()
-                items = self.manager.get_items()
-                self.left_pane.switch_items(items)
-            elif ev[0] == 'open' and ev[1]['full_path'] == '..' or ev[0] == 'parent':
-                last_active = self.manager.parent()
-                if not last_active:
-                    continue
-                items = self.manager.get_items()
-                last_active_index = items.index({'full_path': last_active, 'title': last_active})
-                self.left_pane.switch_items(items, last_active_index)
-            elif ev[0] == 'open':
-                path = ev[1]['full_path']
-                title = ev[1]['title']
-                if os.path.isdir(path):
-                    self.manager.chpath(path)
-                    dir_items = self.manager.get_items()
-                    self.left_pane.switch_items(dir_items)
-                else:
-                    if path.endswith('.rst'):
-                        subprocess.call(["vi", path])
-                        self.manager.chpath('.')
-                        items = self.manager.get_items()
-                        self.left_pane.switch_items(items)
-                    else:
-                        self.manager.chpath(path)
-                        items = self.manager.get_items()
-                        self.left_pane.switch_items(items)
+            self.process_event(ev)
+            c = self.window.stdscr.get_wch()
 
-            c = self.stdscr.get_wch()
-            # Who's gonna process it?
-            if not self.left_pane.process_keypress(c): self.process_keypress(c)
+            self.window.clear_bar()
+            if not self.window.process_keypress(c):
+                signal = self.process_keypress(c)
+                if signal == 'exit':
+                    break
+
+    # Event-processing part
+    def process_event(self, e):
+        if e[0]: self.processors[e[0]](e)
+
+    def process_parent(self, ev):
+        last_active = self.manager.parent()
+        if not last_active:
+            return
+        items = self.manager.get_items()
+        last_active_index = items.index({'full_path': last_active, 'title': last_active})
+        self.window.show_items(items, last_active_index)
+
+    def process_open(self, ev):
+        path = ev[1]['full_path']
+        title = ev[1]['title']
+        if path == '..':
+            self.process_parent(ev)
+            return
+        if os.path.isdir(path):
+            self.manager.chpath(path)
+            dir_items = self.manager.get_items()
+            self.window.show_items(dir_items)
+        else:
+            if path.endswith('.rst'):
+                subprocess.call(["vi", path])
+                self.manager.chpath('.')
+                items = self.manager.get_items()
+                self.window.show_items(items)
+            else:
+                self.manager.chpath(path)
+                items = self.manager.get_items()
+                self.window.show_items(items)
+
+    def process_root(self, event):
+        self.manager.root()
+        items = self.manager.get_items()
+        self.window.show_items(items)
 
     def process_keypress(self, c):
+        """ May return a text signal to mainloop """
         if type(c) is not str:
             return
-        if c in 'r':
+        if c in 'r':    # if populate_db(c)
             from dnevnichok.populate import repopulate_db
             repopulate_db()
         elif c in 'QqЙй':
-            import sys
-            sys.exit(0)
-        elif c in 'f':
+            return 'exit'
+        elif c in 'f':      # MANAGER   if switch_manager(c): return
+                            # switch_manager knows about keybindings
             if self.manager is self.file_manager:
                 return
             self.manager = self.file_manager
             EventQueue.push(('root',))
-        elif c in 'a':
+        elif c in 'a':      # MANAGER
             if self.manager is self.all_manager:
                 return
             self.manager = self.all_manager
             EventQueue.push(('root',))
-        elif c in 't':
+        elif c in 't':      # MANAGER
             if self.manager is self.tag_manager:
                 return
             self.manager = self.tag_manager
             EventQueue.push(('root',))
         elif c in '/':
-            curses.echo()
-            mysearch = self.stdscr.getstr(self.menu_y, 2).decode('unicode_escape')
-            self.left_pane.switch_items(list(filter(lambda q: q['title'].find(mysearch) >= 0, self.manager.get_items())))
-            curses.noecho()
-            self.clear_menu()
-
-
-    def clear_menu(self):
-        self.stdscr.move(self.menu_y, 0)
-        self.stdscr.clrtoeol()
-        self.stdscr.move(self.menu_y + 1, 0)
-        self.stdscr.clrtoeol()
+            search = self.window.input('/ ')
+            new_items = list(filter(lambda q: q['title'].find(search) >= 0, self.manager.get_items()))
+            count = len(new_items)
+            if count > 0:
+                self.window.show_items(new_items)
+                self.window.print("{} items found".format(count))
+            else:
+                self.window.print("Nothing found")
 
 
 if __name__ == '__main__':
     config = get_config()
     curses.wrapper(App)
+    print("Closing dnevnichok. See you later.")
+    sys.exit(0)
