@@ -9,6 +9,8 @@ import logging
 import os
 import sqlite3
 
+from dnevnichok.core import Item
+
 
 class ManagerInterface:
     def chpath(self, path): raise NotImplemented
@@ -48,7 +50,7 @@ class FileManager:
         filelist = list(filter(check, os.listdir(self.curpath)))
         if self.curpath != self.root_path:
             filelist.insert(0, '..')
-        return [{'title': f, 'full_path': f} for f in filelist]
+        return [Item(f) for f in filelist]
 
 
 class TagManager:
@@ -63,7 +65,7 @@ class TagManager:
             if self.curpath == '..':
                 cur.execute("SELECT * FROM tags")
                 rows = cur.fetchall()
-                return [{'title': t[1], 'full_path': t[1]} for t in rows]
+                return [Item(t[1], 'tag') for t in rows]
             # else
             cur.execute("""SELECT n.title, n.full_path FROM notes AS n
                         JOIN note_tags AS nt ON (nt.note_id = n.id)
@@ -71,7 +73,7 @@ class TagManager:
                         WHERE t.title = '{}'""".format(self.curpath))
             rows = cur.fetchall()
             self.last_tag = self.curpath
-            return [{'title': t[0], 'full_path': t[1]} for t in rows]
+            return [Item(t[1]) for t in rows]
 
     def root(self):
         self.chpath('..')
@@ -99,7 +101,7 @@ class AllManager:
             cur = self.conn.cursor()
             cur.execute("SELECT title, full_path FROM notes")
             rows = cur.fetchall()
-            return [{'title': t[0], 'full_path': t[1]} for t in rows]
+            return [Item(t[1]) for t in rows]
 
     def root(self): pass
 

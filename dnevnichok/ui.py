@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import curses
+import logging
 
 from dnevnichok.aux import PagedItems, EventQueue
 
@@ -18,6 +19,8 @@ class ItemList:
         self.length = len(self._items)
         self.width = self.X
 
+        self.move_callbacks = set()
+
     def render(self):
         """ Render new state """
         self.scr.clear()
@@ -28,20 +31,10 @@ class ItemList:
             else: self.render_item(i, item)
 
     def render_item(self, position, item, reverse=False):
-        import os
-        def polute(s):
-            l = self.width - len(s)
-            if l > 0:
-                s = s + ' ' * (l-2)
-                return s
         if reverse:
-            self.scr.addstr(position, 0, polute(item['title'][:self.width]), curses.A_REVERSE)
+            self.scr.addstr(position, 0, item.title[:self.width], curses.A_REVERSE)
         else:
-            if os.path.isdir(item['full_path']):
-                a = curses.color_pair(3)
-            else:
-                a = curses.color_pair(6)
-            self.scr.addstr(position, 0, polute(item['title'][:self.width]), a)
+            self.scr.addstr(position, 0, item.title[:self.width])
         self.scr.refresh()
 
     def switch_items(self, items, cur_item=0):
@@ -76,7 +69,7 @@ class ItemList:
             self.cur_item = self.length-1
             self._items.prev()
             self.render()
-        # self.onMove()
+        self.onMove()
 
     def move_to(self, i):
         if i < 0:
@@ -84,8 +77,19 @@ class ItemList:
         self.move_highlight(i)
         self.cur_item = i
 
-    def onMove(self, func):
-        func(items[self.cur_item])
+    def onMove(self, func=None):
+        """
+        With argument it adds a callback. Without it sequentally every
+        added callback.
+        """
+        if func:
+            self.move_callbacks.add(func)
+        try:
+            item = self._items[self.cur_item]
+        except IndexError:
+            return
+        for callback in self.move_callbacks:
+            callback(item)
 
     def process_keypress(self, c):
         if type(c) is int:                  # Arrow-keys
@@ -117,19 +121,11 @@ class InfoBar:
         self.Y = height - 2
 
     def render_item_info(self, item):
-        def fill(el, width):
-            length = len(el)
-            if length >= width:
-                return el
-            else:
-                remain = width - len(el)
-                return el + ' ' * remain
-
-        self.scr.addstr(fill(item.name, 20))
+        self.print(item.size())
 
     def print(self, text):
         if text:
-            self.scr.addstr(self.Y, 1, text)
+            self.scr.addstr(self.Y, 1, str(text))
 
     def input(self, prompt=''):
         curses.echo()
@@ -162,7 +158,7 @@ class MainWindow:
         subwin = self.stdscr.subwin(stdscr_y - 3, stdscr_x, 0, 0)
 
         self.left_pane = ItemList(subwin)
-        # self.left_pane.onMove(self.menu.render_item_info)
+        self.left_pane.onMove(self.bar.render_item_info)
 
     def print(self, text):
         self.bar.print(text)
