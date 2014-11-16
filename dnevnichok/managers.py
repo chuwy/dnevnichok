@@ -46,11 +46,26 @@ class FileManager:
             os.chdir(self.curpath)
 
     def get_items(self):
-        check = lambda f: os.path.isdir(f) and not f.startswith('.') or f.endswith('.rst')
-        filelist = list(filter(check, os.listdir(self.curpath)))
-        if self.curpath != self.root_path:
-            filelist.insert(0, '..')
-        return [Item(f) for f in filelist]
+        # check = lambda f: os.path.isdir(f) and not f.startswith('.') or f.endswith('.rst')
+        # filelist = list(filter(check, os.listdir(self.curpath)))
+        # if self.curpath != self.root_path:
+        #     filelist.insert(0, '..')
+
+
+        from dnevnichok.helpers import get_config
+        config = get_config()
+        dbpath = os.path.abspath(os.path.expanduser(config.get('Paths', 'db')))
+        conn = sqlite3.connect(dbpath)
+        with conn:
+            cur = conn.cursor()
+            cur.execute("""SELECT n.title, n.full_path FROM notes AS n
+                        WHERE n.full_path LIKE '{}%'""".format(os.path.abspath(self.curpath)))
+            rows = cur.fetchall()
+            self.last_tag = self.curpath
+            return [Item(t[1]) for t in rows]
+
+
+        # return [Item(f) for f in filelist]
 
 
 class TagManager:
@@ -65,7 +80,8 @@ class TagManager:
             if self.curpath == '..':
                 cur.execute("SELECT * FROM tags")
                 rows = cur.fetchall()
-                return [Item(t[1], 'tag') for t in rows]
+                items = [Item(t[1], 'tag') for t in rows]
+                return items
             # else
             cur.execute("""SELECT n.title, n.full_path FROM notes AS n
                         JOIN note_tags AS nt ON (nt.note_id = n.id)

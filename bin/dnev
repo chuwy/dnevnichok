@@ -54,8 +54,10 @@ class App:
         last_active = self.manager.parent()
         if not last_active:
             return
-        if self.manager is self.tag_manager: hint = 'tag'
-        else: hint = None
+        if self.manager is self.tag_manager:
+            hint = 'tag'
+        else:
+            hint = None
         items = self.manager.get_items()
         last_active_index = items.index(Item(last_active, hint))
         self.window.show_items(items, last_active_index)

@@ -34,7 +34,7 @@ class ItemList:
         if reverse:
             self.scr.addstr(position, 0, item.title[:self.width], curses.A_REVERSE)
         else:
-            self.scr.addstr(position, 0, item.title[:self.width])
+            self.scr.addstr(position, 0, item.title[:self.width], item.color())
         self.scr.refresh()
 
     def switch_items(self, items, cur_item=0):
@@ -121,7 +121,17 @@ class InfoBar:
         self.Y = height - 2
 
     def render_item_info(self, item):
-        self.print(item.size())
+        def polute(text, width):
+            text = str(text)
+            text_len = len(text)
+            if text_len >= width:
+                return text[:width]
+            else:
+                return ' ' * (width - text_len) + text
+
+        self.print(polute(item.size(), 6) +
+                   polute(' ', 2) +
+                   polute(item.full_path, 30))
 
     def print(self, text):
         if text:
