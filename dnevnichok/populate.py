@@ -6,24 +6,25 @@ Module contain one-run procedures and helpers for parse whole library
 
 import os
 import sqlite3
-from collections import deque
+from collections import deque, OrderedDict
 from docutils.core import publish_doctree
 from docutils.utils import SystemMessage
 
 from dnevnichok.helpers import get_config
 
-class TagsCache:
-    def __init__(self):
-        self.cache = {}
+import logging
+logging.basicConfig(filename='noter.log')
 
-    def set(self, key, value):
-        if key not in self.cache:
-            self.cache[key] = value
-        else:
-            pass
+try:
+    import colored_traceback
+    colored_traceback.add_hook()
+except ImportError:
+    pass
+
 
 class NoteInfo:
-    def __init__(self):
+    def __init__(self, dir_id):
+        self.dir_id = dir_id
         self.title = None
         self.real_title = False
         self.tags = []
@@ -52,9 +53,9 @@ class NoteInfo:
             return "{} without tags in {}".format(self.get_title(), self.path)
 
 
-def parse_note(path):
+def parse_note(path, dir_id):
     with open(path, 'r') as f:
-        note_info = NoteInfo()
+        note_info = NoteInfo(dir_id)
         note_info.path = path
 
         dom = publish_doctree(f.read(),
@@ -73,6 +74,68 @@ def parse_note(path):
         return note_info
 
 
+def pollute_dirs_and_notes(notespath, dbpath):
+    class MutableInt:
+        i = 1
+        def save(self, i): self.i = i
+    root_dir = MutableInt()     # Store last inserted dir (lastrowid polluting by dirs_path's INSERTs
+    added_roots = OrderedDict() # Cache for all inserted directories
+    exclude = set(['.git'])
+
+    def add_d(path, cur):
+        """ Accepts path to dir and saves all it's parents"""
+        path_listed = path.split('/')
+        def get_full_path(current_name, depth):
+            """ Get directory from listed path by specified depth """
+            if depth == 0: return current_name
+            else: return '/'.join(path_listed[:depth]) + '/' + current_name
+        def get_all_parents(full_path):
+            """ Return list of ids for all parent directories """
+            parents = []
+            cur_path = full_path
+            for parent in full_path.split('/')[:-1]:
+                cur_path = os.path.dirname(cur_path)
+                parents.append(cur_path)
+            return map(lambda p: added_roots[p], parents)
+
+        for depth, dir_name in enumerate(path_listed):
+            cur_full_path = get_full_path(dir_name, depth)
+            if cur_full_path not in added_roots:
+                cur.execute("INSERT INTO dirs(title) VALUES(?)", (dir_name,))
+                added_roots.update({path: cur.lastrowid})       # ok, we've inserted this path
+                root_dir.save(cur.lastrowid)                    # root_dir = lastrowid
+                cur.execute("""INSERT INTO dirs_path(ancestor, descendant)
+                            VALUES(?, ?)""", (cur.lastrowid, cur.lastrowid)) # insert self-reference first
+
+            for parent_id in get_all_parents(cur_full_path):    # inserts all parent dirs as ancestors
+                cur.execute("""INSERT OR IGNORE INTO dirs_path(ancestor, descendant)
+                            VALUES(?, ?)""", (parent_id, root_dir.i))
+
+    conn = sqlite3.connect(dbpath)
+    with conn:
+        cur = conn.cursor()
+        cur.execute("""CREATE TABLE IF NOT EXISTS
+                       dirs(id INTEGER PRIMARY KEY, title TEXT)""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS
+                       dirs_path (ancestor INTEGER, descendant INTEGER,
+                       PRIMARY KEY (ancestor, descendant))""")
+
+        os.chdir(notespath)
+        notes = []
+        for root, dirs, files in os.walk('.', topdown=True):
+            dirs[:] = [d for d in dirs if d not in exclude]
+            add_d(root, cur)
+            for f in filter(lambda x: x.endswith('.rst'), files):
+                try:
+                    notes.append(parse_note(os.path.join(root, f), root_dir.i))
+                except UnicodeDecodeError:      # TODO: add error to DB
+                    logging.warn("so here is unicode error: " + os.path.join(root, f))
+                except SystemMessage:
+                    logging.warn("and here is other error: " + os.path.join(root, f))
+
+    populate_db_with_notes(notes, dbpath)
+
+
 def get_notes(notespath):
     notes = []
     for path, subdirs, files in os.walk(notespath):
@@ -80,14 +143,15 @@ def get_notes(notespath):
             try:
                 notes.append(parse_note(os.path.join(path, name)))
             except UnicodeDecodeError:
-                print('so here is unicode error: ' + os.path.join(path, name))
+                print("so here is unicode error: " + os.path.join(path, name))
             except SystemMessage:
-                print('and here is other error: ' + os.path.join(path, name))
+                print("and here is other error: " + os.path.join(path, name))
     return notes
 
 
 def populate_db_with_dirs(notespath, dbpath):
     """ First candidate to unit testing """
+    # TODO: remove
     def list_dir(path):
         mapped = map(lambda x: os.path.join(path, x), os.listdir(path))
         filtered = filter(lambda i: i.find('/.git') < 0 and os.path.isdir(i), mapped)
@@ -111,7 +175,6 @@ def populate_db_with_dirs(notespath, dbpath):
     conn = sqlite3.connect(dbpath)
     with conn:
         cur = conn.cursor()
-        cur.execute("DROP TABLE IF EXISTS dirs")
         cur.execute("""CREATE TABLE IF NOT EXISTS
                        dirs(id INTEGER PRIMARY KEY, title TEXT, parent_dir_id INT,
                        UNIQUE (title, parent_dir_id),
@@ -133,15 +196,11 @@ def populate_db_with_dirs(notespath, dbpath):
                                VALUES(?, ?)""", (sub_dir, parent))
 
 
-def populate_db(notes, dbpath):
+def populate_db_with_notes(notes, dbpath):
     tags_cache = {}
     conn = sqlite3.connect(dbpath)
     with conn:
         cur = conn.cursor()
-        cur.execute("DROP TABLE IF EXISTS tags")
-        cur.execute("DROP TABLE IF EXISTS notes")
-        cur.execute("DROP TABLE IF EXISTS note_tags")
-
         cur.execute("""CREATE TABLE IF NOT EXISTS
                        tags(id INTEGER PRIMARY KEY, title TEXT UNIQUE)""")
 
@@ -154,7 +213,7 @@ def populate_db(notes, dbpath):
                        FOREIGN KEY(note_id) REFERENCES notes(id), FOREIGN KEY(tag_id) REFERENCES tags(id))""")
 
         for note in notes:
-            cur.execute("INSERT INTO notes(title, real_title, full_path, size) VALUES(?, ?, ?, ?)", (note.get_title(), note.real_title, note.path, note.get_size()))
+            cur.execute("INSERT INTO notes(title, real_title, full_path, size, dir_id) VALUES(?, ?, ?, ?, ?)", (note.get_title(), note.real_title, note.path, note.get_size(), note.dir_id))
             note.id = cur.lastrowid
             for tag in note.tags:
                 cur.execute("INSERT OR IGNORE INTO tags(title) VALUES(?)", (tag,))
@@ -168,6 +227,17 @@ def repopulate_db():
     dbpath = os.path.abspath(os.path.expanduser(config.get('Paths', 'db')))
     notespath = os.path.abspath(os.path.expanduser(config.get('Paths', 'notes')))
 
-    populate_db_with_dirs(notespath, dbpath)
-    notes = get_notes(notespath)
-    populate_db(notes, dbpath)
+    conn = sqlite3.connect(dbpath)
+    with conn:
+        cur = conn.cursor()
+        cur.execute("DROP TABLE IF EXISTS notes")
+        cur.execute("DROP TABLE IF EXISTS tags")
+        cur.execute("DROP TABLE IF EXISTS note_tags")
+        cur.execute("DROP TABLE IF EXISTS dirs_path")
+        cur.execute("DROP TABLE IF EXISTS dirs")
+
+    pollute_dirs_and_notes(notespath, dbpath)
+
+
+if __name__ == '__main__':
+    repopulate_db()
