@@ -120,6 +120,9 @@ class App:
                 self.window.print("{} items found".format(count))
             else:
                 self.window.print("Nothing found")
+        elif c in ':':
+            command = self.window.input(': ')
+            self.window.print("Try to execute " + command + " with " + str(self.window.get_current_item()))
 
 
 if __name__ == '__main__':

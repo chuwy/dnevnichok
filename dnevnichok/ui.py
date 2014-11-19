@@ -105,6 +105,9 @@ class ItemList:
             for callback in self.move_callbacks:
                 callback(item)
 
+    def get_current_item(self):
+        return self._items[self.cur_item]
+
     def process_keypress(self, c):
         if type(c) is int:                  # Arrow-keys
             if c == curses.KEY_UP:
@@ -191,3 +194,6 @@ class MainWindow:
 
     def process_keypress(self, c):
         return self.left_pane.process_keypress(c)
+
+    def get_current_item(self):
+        return self.left_pane.get_current_item()
