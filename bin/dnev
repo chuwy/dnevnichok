@@ -73,11 +73,14 @@ class App:
         item = ev[1]
         if isinstance(item, (DirItem, TagItem,)):
             self.manager.chpath(item.id)
+            active = None
         elif isinstance(item, NoteItem):
             subprocess.call(["vi", item.get_path()])
+            active = item
 
         items = self.manager.get_items()
-        self.window.show_items(items)
+        last_active_index = items.index(active) if active else 0
+        self.window.show_items(items, last_active_index)
 
     def process_root(self, event):
         items = self.manager.get_items()

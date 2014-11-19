@@ -27,7 +27,7 @@ class ManagerInterface:
         raise NotImplemented
 
 
-class FileManager:
+class FileManager(ManagerInterface):
     def __init__(self, root_path, dbpath):
         self._bases = deque()
         self.root_path = root_path
@@ -74,7 +74,7 @@ class FileManager:
 
 
 
-class TagManager:
+class TagManager(ManagerInterface):
     def __init__(self, dbpath):
         self._conn = sqlite3.connect(dbpath)
         self.base = None            # None means root
@@ -116,7 +116,7 @@ class TagManager:
         self.base = tag
 
 
-class AllManager:
+class AllManager(ManagerInterface):
     def __init__(self, dbpath):
         self._conn = sqlite3.connect(dbpath)
         self.base = None
