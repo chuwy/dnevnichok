@@ -8,7 +8,7 @@ import logging
 import subprocess
 
 from dnevnichok.aux import EventQueue
-from dnevnichok.core import Item
+from dnevnichok.core import Item, NoteItem, DirItem, TagItem
 from dnevnichok.helpers import get_config
 from dnevnichok.managers import AllManager, FileManager, TagManager
 from dnevnichok.ui import ItemList, MainWindow
@@ -71,11 +71,10 @@ class App:
 
     def process_open(self, ev):
         item = ev[1]
-        if item.category in ('dir', 'tag',):
+        if isinstance(item, (DirItem, TagItem,)):
             self.manager.chpath(item.id)
-        elif item.category == 'note':
+        elif isinstance(item, NoteItem):
             subprocess.call(["vi", item.get_path()])
-            subprocess.call(["clear"])
 
         items = self.manager.get_items()
         self.window.show_items(items)

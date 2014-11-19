@@ -1,3 +1,4 @@
+from datetime import datetime
 import curses
 import os
 import logging
@@ -73,8 +74,20 @@ class NoteItem(ItemInterface):
         else:
             return curses.color_pair(2)
 
+    def get_mod_date(self):
+        try:
+            date = datetime.strptime(self.mod_date, '%Y-%m-%d %H:%M:%S %z')
+        except ValueError: return ''
+        return date.strftime('%d %b %y')
+
+    def get_pub_date(self):
+        try:
+            date = datetime.strptime(self.pub_date, '%Y-%m-%d %H:%M:%S %z')
+        except ValueError: return ''
+        return date.strftime('%d %b %y')
+
     def get_view(self):
-        return (self.title, self.get_size())
+        return (self.title, self.get_pub_date())
 
 
 class DateItem(ItemInterface):

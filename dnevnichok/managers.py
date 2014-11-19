@@ -65,11 +65,13 @@ class FileManager:
                            JOIN dirs as n     ON dirs_path.descendant = n.id
                            WHERE dirs_path.direct = 1 and dirs_path.ancestor = {}""".format(str(self.base)))
             dirs = cur.fetchall()
-            cur.execute("""SELECT n.id, n.title, n.size, n.full_path, n.real_title FROM notes AS n
+            cur.execute("""SELECT n.id, n.title, n.size, n.full_path, n.pub_date, n.mod_date, n.real_title
+                           FROM notes AS n
                            WHERE n.dir_id = {}""".format(self.base))
             notes = cur.fetchall()
             return [DirItem(t[0], title=t[1], path=t[1], size=t[2]) for t in dirs] + \
-                   [NoteItem(t[0], title=t[1], size=t[2], path=t[3], real_title=t[4]) for t in notes]
+                   sorted([NoteItem(t[0], title=t[1], size=t[2], path=t[3], pub_date=t[4], mod_date=t[5], real_title=t[6]) for t in notes], key=lambda i: i.pub_date, reverse=True)
+
 
 
 class TagManager:
@@ -92,12 +94,12 @@ class TagManager:
                 rows = cur.fetchall()
                 return sorted([TagItem(t[0], title=t[1], size=get_size(t[0])) for t in rows], key=lambda i: i.get_size(), reverse=True)
             # else
-            cur.execute("""SELECT n.id, n.title, n.full_path, n.size, n.real_title FROM notes AS n
+            cur.execute("""SELECT n.id, n.title, n.real_title, n.full_path, n.pub_date, n.mod_date, n.size FROM notes AS n
                            JOIN note_tags AS nt ON (nt.note_id = n.id)
                            JOIN tags as t ON (nt.tag_id = t.id)
                            WHERE t.id = {}""".format(self.base))
             rows = cur.fetchall()
-            return [NoteItem(t[0], title=t[1], path=t[2], size=t[3], real_title=t[4]) for t in rows]
+            return sorted([NoteItem(t[0], title=t[1], real_title=t[2], path=t[3], pub_date=t[4], mod_date=t[5], size=t[6]) for t in rows], key=lambda i: i.pub_date, reverse=True)
 
     def root(self):
         self.chpath(None)
@@ -122,9 +124,9 @@ class AllManager:
     def get_items(self):
         with self._conn:
             cur = self._conn.cursor()
-            cur.execute("SELECT id, title, full_path, size, real_title FROM notes")
+            cur.execute("SELECT id, title, full_path, pub_date, mod_date, size, real_title FROM notes")
             rows = cur.fetchall()
-            return [NoteItem(t[0], title=t[1], path=t[2], size=t[3], real_title=t[4]) for t in rows]
+            return sorted([NoteItem(t[0], title=t[1], path=t[2], pub_date=t[3], mod_date=t[4], size=t[5], real_title=t[6]) for t in rows], key=lambda i: i.pub_date, reverse=True)
 
     def root(self): pass
 

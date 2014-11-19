@@ -13,6 +13,7 @@ from os.path import join, isdir
 import sqlite3
 
 from dnevnichok.helpers import get_config
+from dnevnichok.backend import GitCommandBackend
 
 logging.basicConfig(filename='noter.log')
 
@@ -21,6 +22,12 @@ try:
     colored_traceback.add_hook()
 except ImportError:
     pass
+
+
+config = get_config()
+dbpath = os.path.abspath(os.path.expanduser(config.get('Paths', 'db')))
+notespath = os.path.abspath(os.path.expanduser(config.get('Paths', 'notes')))
+repo = GitCommandBackend(notespath)
 
 
 class NoteInfo:
@@ -58,6 +65,8 @@ def parse_note(path, dir_id):
     with open(path, 'r') as f:
         note_info = NoteInfo(dir_id)
         note_info.path = path
+        note_info.mod_date = repo.get_file_mod_date(path)
+        note_info.pub_date = repo.get_file_pub_date(path)
 
         dom = publish_doctree(f.read(),
                               settings_overrides={'halt_level': 2,
@@ -144,7 +153,7 @@ def pollute_dirs_and_notes(notespath, dbpath):
                 except SystemMessage:
                     logging.warn("and here is other error: " + join(root, f))
 
-    populate_db_with_notes(notes, dbpath)
+    populate_db_with_notes(notes, notespath, dbpath)
 
 
 def get_notes(notespath):
@@ -208,9 +217,10 @@ def populate_db_with_dirs(notespath, dbpath):
                                VALUES(?, ?)""", (sub_dir, parent))
 
 
-def populate_db_with_notes(notes, dbpath):
+def populate_db_with_notes(notes, notespath, dbpath):
     tags_cache = {}
     conn = sqlite3.connect(dbpath)
+
     with conn:
         cur = conn.cursor()
         cur.execute("""CREATE TABLE IF NOT EXISTS
@@ -225,7 +235,9 @@ def populate_db_with_notes(notes, dbpath):
                        FOREIGN KEY(note_id) REFERENCES notes(id), FOREIGN KEY(tag_id) REFERENCES tags(id))""")
 
         for note in notes:
-            cur.execute("INSERT INTO notes(title, real_title, full_path, size, dir_id) VALUES(?, ?, ?, ?, ?)", (note.get_title(), note.real_title, note.path, note.get_size(), note.dir_id))
+            cur.execute("""INSERT INTO notes(title, real_title, full_path, pub_date, mod_date, size, dir_id)
+                           VALUES(?, ?, ?, ?, ?, ?, ?)""",
+                           (note.get_title(), note.real_title, note.path, note.pub_date, note.mod_date, note.get_size(), note.dir_id))
             note.id = cur.lastrowid
             for tag in note.tags:
                 cur.execute("INSERT OR IGNORE INTO tags(title) VALUES(?)", (tag,))
@@ -235,10 +247,6 @@ def populate_db_with_notes(notes, dbpath):
 
 
 def repopulate_db():
-    config = get_config()
-    dbpath = os.path.abspath(os.path.expanduser(config.get('Paths', 'db')))
-    notespath = os.path.abspath(os.path.expanduser(config.get('Paths', 'notes')))
-
     conn = sqlite3.connect(dbpath)
     with conn:
         cur = conn.cursor()

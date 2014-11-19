@@ -7,16 +7,18 @@ from dnevnichok.aux import PagedItems, EventQueue
 
 
 def polute(text, width, begin=True):
-    """ Ads spaces to begin or end of line """
+    """ Adds spaces to begin or end of line """
     text = str(text)
     text_len = len(text)
     if text_len >= width:
         return text[:width]
     else:
+        remain = ' ' * (width - text_len)
         if begin:
-            return ' ' * (width - text_len) + text
+            return remain + text
         else:
-            return text + ' ' * (width - text_len)
+            return text + remain
+
 
 class ItemList:
     """
@@ -44,7 +46,7 @@ class ItemList:
 
     def render_item(self, position, item, reverse=False):
         def render_view(view):
-            return polute(view[0], 40, False) + polute(view[1], 5)[:self.width]
+            return polute(view[0], self.width-20, False) + polute(view[1], 12)[:self.width]
         view = item.get_view()
         if reverse:
             self.scr.addstr(position, 0, render_view(view), curses.A_REVERSE)
