@@ -4,15 +4,16 @@
 Module contain one-run procedures and helpers for parse whole library
 """
 
-import os
-import sqlite3
 from collections import deque, OrderedDict
 from docutils.core import publish_doctree
 from docutils.utils import SystemMessage
+import logging
+import os
+from os.path import join, isdir
+import sqlite3
 
 from dnevnichok.helpers import get_config
 
-import logging
 logging.basicConfig(filename='noter.log')
 
 try:
@@ -85,6 +86,10 @@ def pollute_dirs_and_notes(notespath, dbpath):
     def add_d(path, cur):
         """ Accepts path to dir and saves all it's parents"""
         path_listed = path.split('/')
+
+        content = filter(lambda p: isdir(join(path,p)) or p.endswith('.rst'), os.listdir(path))
+        size = len(list(content))
+
         def get_full_path(current_name, depth):
             """ Get directory from listed path by specified depth """
             if depth == 0: return current_name
@@ -93,7 +98,7 @@ def pollute_dirs_and_notes(notespath, dbpath):
             """ Return list of ids for all parent directories """
             parents = []
             cur_path = full_path
-            for parent in full_path.split('/')[:-1]:
+            for d, parent in enumerate(full_path.split('/')[:-1]):
                 cur_path = os.path.dirname(cur_path)
                 parents.append(cur_path)
             return map(lambda p: added_roots[p], parents)
@@ -101,23 +106,29 @@ def pollute_dirs_and_notes(notespath, dbpath):
         for depth, dir_name in enumerate(path_listed):
             cur_full_path = get_full_path(dir_name, depth)
             if cur_full_path not in added_roots:
-                cur.execute("INSERT INTO dirs(title) VALUES(?)", (dir_name,))
+                cur.execute("""INSERT INTO dirs(title, size)
+                               VALUES(?, ?)""",
+                               (dir_name, size))
                 added_roots.update({path: cur.lastrowid})       # ok, we've inserted this path
                 root_dir.save(cur.lastrowid)                    # root_dir = lastrowid
-                cur.execute("""INSERT INTO dirs_path(ancestor, descendant)
-                            VALUES(?, ?)""", (cur.lastrowid, cur.lastrowid)) # insert self-reference first
+                cur.execute("""INSERT INTO dirs_path(ancestor, descendant, direct)
+                               VALUES(?, ?, ?)""",
+                               (cur.lastrowid, cur.lastrowid, False,)) # insert self-reference first
 
-            for parent_id in get_all_parents(cur_full_path):    # inserts all parent dirs as ancestors
-                cur.execute("""INSERT OR IGNORE INTO dirs_path(ancestor, descendant)
-                            VALUES(?, ?)""", (parent_id, root_dir.i))
+            for d, parent_id in enumerate(get_all_parents(cur_full_path)):    # inserts all parent dirs as ancestors
+                direct = True if d == 0 else False
+                cur.execute("""INSERT OR IGNORE INTO dirs_path(ancestor, descendant, direct)
+                               VALUES(?, ?, ?)""",
+                               (parent_id, root_dir.i, direct,))
+
 
     conn = sqlite3.connect(dbpath)
     with conn:
         cur = conn.cursor()
         cur.execute("""CREATE TABLE IF NOT EXISTS
-                       dirs(id INTEGER PRIMARY KEY, title TEXT)""")
+                       dirs(id INTEGER PRIMARY KEY, title TEXT, size INTEGR)""")
         cur.execute("""CREATE TABLE IF NOT EXISTS
-                       dirs_path (ancestor INTEGER, descendant INTEGER,
+                       dirs_path (ancestor INTEGER, descendant INTEGER, direct INTEGER,
                        PRIMARY KEY (ancestor, descendant))""")
 
         os.chdir(notespath)
@@ -127,11 +138,11 @@ def pollute_dirs_and_notes(notespath, dbpath):
             add_d(root, cur)
             for f in filter(lambda x: x.endswith('.rst'), files):
                 try:
-                    notes.append(parse_note(os.path.join(root, f), root_dir.i))
+                    notes.append(parse_note(join(root, f), root_dir.i))
                 except UnicodeDecodeError:      # TODO: add error to DB
-                    logging.warn("so here is unicode error: " + os.path.join(root, f))
+                    logging.warn("so here is unicode error: " + join(root, f))
                 except SystemMessage:
-                    logging.warn("and here is other error: " + os.path.join(root, f))
+                    logging.warn("and here is other error: " + join(root, f))
 
     populate_db_with_notes(notes, dbpath)
 
@@ -141,11 +152,11 @@ def get_notes(notespath):
     for path, subdirs, files in os.walk(notespath):
         for name in (f for f in files if f.endswith(".rst")):
             try:
-                notes.append(parse_note(os.path.join(path, name)))
+                notes.append(parse_note(join(path, name)))
             except UnicodeDecodeError:
-                print("so here is unicode error: " + os.path.join(path, name))
+                print("so here is unicode error: " + join(path, name))
             except SystemMessage:
-                print("and here is other error: " + os.path.join(path, name))
+                print("and here is other error: " + join(path, name))
     return notes
 
 
@@ -153,8 +164,8 @@ def populate_db_with_dirs(notespath, dbpath):
     """ First candidate to unit testing """
     # TODO: remove
     def list_dir(path):
-        mapped = map(lambda x: os.path.join(path, x), os.listdir(path))
-        filtered = filter(lambda i: i.find('/.git') < 0 and os.path.isdir(i), mapped)
+        mapped = map(lambda x: join(path, x), os.listdir(path))
+        filtered = filter(lambda i: i.find('/.git') < 0 and isdir(i), mapped)
         return list(filtered)
 
     def get_dirs(dirs):
@@ -163,7 +174,8 @@ def populate_db_with_dirs(notespath, dbpath):
         gives us whole flat tree structure of directories
         Remainder: recursion in python is ugly, at least need to write generator
         """
-        if len(dirs) == 0: return []
+        if len(dirs) == 0:
+            return []
         if len(dirs) == 1:
             return [dirs[0]] + get_dirs(list_dir(dirs[0]))
         else:

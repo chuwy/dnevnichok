@@ -1,74 +1,87 @@
-import os
 import curses
+import os
+import logging
 
-# TODO: it can be a very bad idea to recreate db connection on each item render,
-# so do not forget you may be be forced to reuse it.
-# ...or event better all managers must use SQLite
+logging.basicConfig(filename='noter.log')
+
 
 class ItemInterface:
     """
     Base class for retrieve whole information about item.
     Using mostly by GUI module.
+    Now also responsible for navigating
+    id = DB pk or another way to 100% identify object and thus navigate to it
+         by manager and also get all info. Single required arg
+    title = will be named almost everywhere
+    path? = used by chpath() in managers if id isn't appropriate
+    name_  = filename if need
+    size!
+    color
     """
-    def __init__(self, path): raise NotImplementedError
-    def size(self): raise NotImplementedError
-    def title(self): raise NotImplementedError
-    def color(self): return curses.color_pair(3)
+    def __init__(self, item_id, **kwargs):
+        self.id = item_id
+        self.__dict__.update(kwargs)
+
+    def get_view(self):
+        return (self.title, self.get_size())
+
+    def get_color(self): return curses.color_pair(3)
     def __repr__(self): return self.category + ' ' + self.title
     def __eq__(self, other):
         if self.category != other.category: return False
-        return self.full_path == other.full_path
+        return self.id == other.id
 
 
 class TagItem(ItemInterface):
     category = 'tag'
 
-    def __init__(self, path):
-        self.title = path
-        self.full_path = path
+    def get_size(self):
+        return self.size
 
-    def size(self):
-        return 33
+    def get_path(self):
+        return self.title
 
-    def color(self):
+    def get_color(self):
         return curses.color_pair(4)
-
-
-class DateItem(ItemInterface):
-    category = 'date'
-
-    def __init__(self, path):
-        date = datetime.strptime(path, '%Y-%m-%dT%H:%M:%S.%fZ')
 
 
 class DirItem(ItemInterface):
     category = 'dir'
 
-    def __init__(self, path):
-        self.title = os.path.basename(path)
-        self.full_path = path
+    def get_size(self):
+        return self.size
 
-    def size(self):
-        all_dirs = os.listdir(self.full_path)
-        filtered = filter(lambda f: not f.startswith('.'), all_dirs)
-        return len(list(filtered))
+    def get_path(self):
+        return self.title
 
-    def color(self):
+    def get_color(self):
         return curses.color_pair(5)
 
 
 class NoteItem(ItemInterface):
     category = 'note'
 
-    def __init__(self, path):
-        self.title = os.path.basename(path)
-        self.full_path = path
+    def get_size(self):
+        return self.size
 
-    def size(self):
-        return os.path.getsize(self.full_path)
+    def get_path(self):
+        return self.path
 
-    def color(self):
-        return curses.color_pair(6)
+    def get_color(self):
+        if self.real_title:
+            return curses.color_pair(6)
+        else:
+            return curses.color_pair(2)
+
+    def get_view(self):
+        return (self.title, self.get_size())
+
+
+class DateItem(ItemInterface):
+    category = 'date'
+
+    def __init__(self, date_id):
+        date = datetime.strptime(date_id, '%Y-%m-%dT%H:%M:%S.%fZ')
 
 
 def Item(path, hint=None):
@@ -83,12 +96,4 @@ def Item(path, hint=None):
         if hint == 'date':  return DateItem(path)
         if hint == 'note':  return NoteItem(path)
 
-    if os.path.isfile(path) and path.endswith('.rst'):
-        return NoteItem(path)
-    elif os.path.isdir(path):
-        return DirItem(path)
-    else:
-        try:
-            return DateItem(path)
-        except ValueError:
-            pass
+    return DirItem(path)

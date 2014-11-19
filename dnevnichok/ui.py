@@ -6,6 +6,18 @@ import logging
 from dnevnichok.aux import PagedItems, EventQueue
 
 
+def polute(text, width, begin=True):
+    """ Ads spaces to begin or end of line """
+    text = str(text)
+    text_len = len(text)
+    if text_len >= width:
+        return text[:width]
+    else:
+        if begin:
+            return ' ' * (width - text_len) + text
+        else:
+            return text + ' ' * (width - text_len)
+
 class ItemList:
     """
     Pane with list of dirs, tags, files or god knows what else
@@ -31,10 +43,14 @@ class ItemList:
             else: self.render_item(i, item)
 
     def render_item(self, position, item, reverse=False):
+        def render_view(view):
+            return polute(view[0], 40, False) + polute(view[1], 5)[:self.width]
+        view = item.get_view()
         if reverse:
-            self.scr.addstr(position, 0, item.title[:self.width], curses.A_REVERSE)
+            self.scr.addstr(position, 0, render_view(view), curses.A_REVERSE)
+            self.onHightlight(item=item)
         else:
-            self.scr.addstr(position, 0, item.title[:self.width], item.color())
+            self.scr.addstr(position, 0, render_view(view), item.get_color())
         self.scr.refresh()
 
     def switch_items(self, items, cur_item=0):
@@ -69,7 +85,6 @@ class ItemList:
             self.cur_item = self.length-1
             self._items.prev()
             self.render()
-        self.onMove()
 
     def move_to(self, i):
         if i < 0:
@@ -77,19 +92,16 @@ class ItemList:
         self.move_highlight(i)
         self.cur_item = i
 
-    def onMove(self, func=None):
+    def onHightlight(self, func=None, item=None):
         """
-        With argument it adds a callback. Without it sequentally every
-        added callback.
+        With func argument it adds a callback. With item it sequentally run
+        every added callback.
         """
         if func:
             self.move_callbacks.add(func)
-        try:
-            item = self._items[self.cur_item]
-        except IndexError:
-            return
-        for callback in self.move_callbacks:
-            callback(item)
+        if item:
+            for callback in self.move_callbacks:
+                callback(item)
 
     def process_keypress(self, c):
         if type(c) is int:                  # Arrow-keys
@@ -121,17 +133,9 @@ class InfoBar:
         self.Y = height - 2
 
     def render_item_info(self, item):
-        def polute(text, width):
-            text = str(text)
-            text_len = len(text)
-            if text_len >= width:
-                return text[:width]
-            else:
-                return ' ' * (width - text_len) + text
-
-        self.print(polute(item.size(), 6) +
+        self.print(polute(item.get_size(), 8) +
                    polute(' ', 2) +
-                   polute(item.full_path, 30))
+                   polute(item.get_path(), 30))
 
     def print(self, text):
         if text:
@@ -168,7 +172,7 @@ class MainWindow:
         subwin = self.stdscr.subwin(stdscr_y - 3, stdscr_x, 0, 0)
 
         self.left_pane = ItemList(subwin)
-        self.left_pane.onMove(self.bar.render_item_info)
+        self.left_pane.onHightlight(func=self.bar.render_item_info)
 
     def print(self, text):
         self.bar.print(text)

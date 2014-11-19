@@ -4,7 +4,7 @@ from setuptools import setup
 
 
 setup(name='dnevnichok',
-      version='0.0.1',
+      version='0.1.0',
       description=open('README.rst', 'r').read(),
       author='Anton Parkhomenko',
       author_email='mailbox@chuwy.me',

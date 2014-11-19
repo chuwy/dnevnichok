@@ -18,13 +18,23 @@ code = locale.getpreferredencoding()
 
 logging.basicConfig(filename='noter.log')
 
+try:
+    import colored_traceback
+    colored_traceback.add_hook()
+except ImportError:
+    pass
+
 
 class App:
     """ App manages main window, managers, process events from underlying UI"""
     def __init__(self, stdscr):
-        self.file_manager = FileManager(os.path.abspath(os.path.expanduser(config.get('Paths', 'notes'))))
-        self.tag_manager = TagManager(os.path.abspath(os.path.expanduser(config.get('Paths', 'db'))))
-        self.all_manager = AllManager(os.path.abspath(os.path.expanduser(config.get('Paths', 'db'))))
+        dbpath = os.path.abspath(os.path.expanduser(config.get('Paths', 'db')))
+        notespath = os.path.abspath(os.path.expanduser(config.get('Paths', 'notes')))
+        os.chdir(notespath)
+
+        self.file_manager = FileManager(1, dbpath)
+        self.tag_manager = TagManager(dbpath)
+        self.all_manager = AllManager(dbpath)
         self.manager = self.file_manager        # current manager
         items = self.manager.get_items()
         self.window = MainWindow(stdscr)
@@ -54,37 +64,23 @@ class App:
         last_active = self.manager.parent()
         if not last_active:
             return
-        if self.manager is self.tag_manager:
-            hint = 'tag'
-        else:
-            hint = None
+        hint = 'tag' if self.manager is self.tag_manager else None
         items = self.manager.get_items()
         last_active_index = items.index(Item(last_active, hint))
         self.window.show_items(items, last_active_index)
 
     def process_open(self, ev):
-        path = ev[1].full_path
-        title = ev[1].title
-        if path == '..':
-            self.process_parent(ev)
-            return
-        if os.path.isdir(path):
-            self.manager.chpath(path)
-            dir_items = self.manager.get_items()
-            self.window.show_items(dir_items)
-        else:
-            if path.endswith('.rst'):
-                subprocess.call(["vi", path])
-                self.manager.chpath('.')
-                items = self.manager.get_items()
-                self.window.show_items(items)
-            else:
-                self.manager.chpath(path)
-                items = self.manager.get_items()
-                self.window.show_items(items)
+        item = ev[1]
+        if item.category in ('dir', 'tag',):
+            self.manager.chpath(item.id)
+        elif item.category == 'note':
+            subprocess.call(["vi", item.get_path()])
+            subprocess.call(["clear"])
+
+        items = self.manager.get_items()
+        self.window.show_items(items)
 
     def process_root(self, event):
-        self.manager.root()
         items = self.manager.get_items()
         self.window.show_items(items)
 
