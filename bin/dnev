@@ -9,6 +9,7 @@ import subprocess
 
 from dnevnichok.aux import EventQueue
 from dnevnichok.core import Item, NoteItem, DirItem, TagItem
+from dnevnichok.commands import get_all_commands
 from dnevnichok.helpers import get_config
 from dnevnichok.managers import AllManager, FileManager, TagManager
 from dnevnichok.ui import ItemList, MainWindow
@@ -25,6 +26,47 @@ except ImportError:
     pass
 
 
+class Executor:
+    """
+    Responsible for take find all available commands, pick right one and
+    give it everything it needs. Also stores history.
+    """
+    def __init__(self, app):
+        self.app = app
+        self.commands = get_all_commands()
+
+    def run_command(self, command):
+        command, *args = command.split()
+        try:
+            Command = self.commands[command]
+        except KeyError:
+            self.app.window.print("Unknown command: " + command)
+            return
+
+        execution = Command(self, args)
+        execution.fill_args()
+        proceed = execution.ensure()
+        if proceed:
+            output = execution.run()
+        if output:
+            self.app.print(output)
+
+    def ensure(self, text, tries=0):
+        choice = self.app.window.input(text)
+        if choice in 'yY':
+            return True
+        elif choice in 'nN':
+            return False
+        elif tries > 3:
+            self.app.window.print("Ok. Just have a good day")
+            return False
+        else:
+            return self.ensure(text, tries+1)
+
+    def get_current_item(self):
+        return self.app.window.get_current_item()
+
+
 class App:
     """ App manages main window, managers, process events from underlying UI"""
     def __init__(self, stdscr):
@@ -32,6 +74,7 @@ class App:
         notespath = os.path.abspath(os.path.expanduser(config.get('Paths', 'notes')))
         os.chdir(notespath)
 
+        self.executor = Executor(self)
         self.file_manager = FileManager(1, dbpath)
         self.tag_manager = TagManager(dbpath)
         self.all_manager = AllManager(dbpath)
@@ -41,6 +84,7 @@ class App:
         self.window.show_items(items)
         self.processors = {'open': self.process_open,
                            'root': self.process_root,
+                           'reload': self.process_reload,
                            'parent': self.process_parent}
         self.loop()
 
@@ -86,6 +130,15 @@ class App:
         items = self.manager.get_items()
         self.window.show_items(items)
 
+    def process_reload(self, event):
+        active_item = self.window.get_current_item()
+        items = self.manager.get_items()
+        try:
+            last_active_index = items.index(active_item)
+        except ValueError:  #   it's deleted
+            last_active_index = len(items) - 1
+        self.window.show_items(items, last_active_index)
+
     def process_keypress(self, c):
         """ May return a text signal to mainloop """
         if type(c) is not str:
@@ -93,6 +146,7 @@ class App:
         if c in 'r':    # if populate_db(c)
             from dnevnichok.populate import repopulate_db
             repopulate_db()
+            EventQueue.push(('reload',))
         elif c in 'QqЙй':
             return 'exit'
         elif c in 'f':      # MANAGER   if switch_manager(c): return
@@ -122,7 +176,7 @@ class App:
                 self.window.print("Nothing found")
         elif c in ':':
             command = self.window.input(': ')
-            self.window.print("Try to execute " + command + " with " + str(self.window.get_current_item()))
+            self.executor.run_command(command)
 
 
 if __name__ == '__main__':

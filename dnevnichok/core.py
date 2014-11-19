@@ -62,6 +62,11 @@ class DirItem(ItemInterface):
 class NoteItem(ItemInterface):
     category = 'note'
 
+    def __init__(self, item_id, **kwargs):
+        super().__init__(item_id, **kwargs)
+        if not self.real_title and self.title.find('diary_') >= 0:
+            self.title = datetime.strptime(self.title, 'diary_%d-%m-%Y.rst').strftime('Дневничок от %d %B %Y')
+
     def get_size(self):
         return self.size
 
@@ -87,7 +92,7 @@ class NoteItem(ItemInterface):
         return date.strftime('%d %b %y')
 
     def get_view(self):
-        return (self.title, self.get_pub_date())
+        return (self.title, self.get_mod_date())
 
 
 class DateItem(ItemInterface):
