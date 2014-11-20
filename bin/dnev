@@ -9,6 +9,7 @@ import subprocess
 
 from dnevnichok.aux import EventQueue
 from dnevnichok.core import Item, NoteItem, DirItem, TagItem
+from dnevnichok.commands import get_all_commands, InsufficientArguments
 from dnevnichok.helpers import get_config
 from dnevnichok.managers import AllManager, FileManager, TagManager
 from dnevnichok.populate import repopulate_db
@@ -27,6 +28,55 @@ except ImportError:
     pass
 
 
+class Executor:
+    """
+    Responsible for take find all available commands, pick right one and
+    give it everything it needs. Also stores history.
+    """
+    def __init__(self, app):
+        self.app = app
+        self.commands = get_all_commands()
+
+    def run_command(self, command):
+        command, *args = command.split()
+        try:
+            Command = self.commands[command]
+        except KeyError:
+            self.print("Unknown command: " + command)
+            return
+
+        try:
+            execution = Command(self, args)
+        except InsufficientArguments as e:
+            self.print(e.message)
+            return
+
+        execution.fill_args()
+        proceed = execution.ensure()
+        if proceed:
+            output = execution.run()
+        if output:
+            self.print(output)
+
+    def ensure(self, text, tries=0):
+        choice = self.app.window.input(text)
+        if choice in 'yY':
+            return True
+        elif choice in 'nN':
+            return False
+        elif tries > 3:
+            self.app.window.print("Ok. Just have a good day")
+            return False
+        else:
+            return self.ensure(text, tries+1)
+
+    def get_current_item(self):
+        return self.app.window.get_current_item()
+
+    def print(self, message):
+        self.app.print(message)
+
+
 class App:
     """ App manages main window, managers, process events from underlying UI"""
     def __init__(self, stdscr):
@@ -36,6 +86,7 @@ class App:
         if not os.path.exists(dbpath):
             repopulate_db()
 
+        self.executor = Executor(self)
         self.file_manager = FileManager(1, dbpath)
         self.tag_manager = TagManager(dbpath)
         self.all_manager = AllManager(dbpath)
@@ -45,6 +96,7 @@ class App:
         self.window.show_items(items)
         self.processors = {'open': self.process_open,
                            'root': self.process_root,
+                           'reload': self.process_reload,
                            'parent': self.process_parent}
         self.loop()
 
@@ -81,6 +133,8 @@ class App:
         elif isinstance(item, NoteItem):
             subprocess.call(["vi", item.get_path()])
             active = item
+            curses.curs_set(1)  # THIS is sought-for hack
+            curses.curs_set(0)
 
         items = self.manager.get_items()
         last_active_index = items.index(active) if active else 0
@@ -90,31 +144,25 @@ class App:
         items = self.manager.get_items()
         self.window.show_items(items)
 
+    def process_reload(self, event):
+        active_item = self.window.get_current_item()
+        items = self.manager.get_items()
+        try:
+            last_active_index = items.index(active_item)
+        except ValueError:  #   it's deleted
+            last_active_index = len(items) - 1
+        self.window.show_items(items, last_active_index)
+
     def process_keypress(self, c):
         """ May return a text signal to mainloop """
         if type(c) is not str:
             return
-        if c in 'r':    # if populate_db(c)
+        if c in 'QqЙй': return 'exit'
+        elif c in 'Rr':
             repopulate_db()
-        elif c in 'QqЙй':
-            return 'exit'
-        elif c in 'f':      # MANAGER   if switch_manager(c): return
-                            # switch_manager knows about keybindings
-            if self.manager is self.file_manager:
-                return
-            self.manager = self.file_manager
-            EventQueue.push(('root',))
-        elif c in 'a':      # MANAGER
-            if self.manager is self.all_manager:
-                return
-            self.manager = self.all_manager
-            EventQueue.push(('root',))
-        elif c in 't':      # MANAGER
-            if self.manager is self.tag_manager:
-                return
-            self.manager = self.tag_manager
-            EventQueue.push(('root',))
-        elif c in '/':
+            EventQueue.push(('reload',))
+        elif self.switch_manager(c): return
+        elif c in '/':      # TODO: rewrite as filter command
             search = self.window.input('/ ')
             new_items = list(filter(lambda q: q.title.find(search) >= 0, self.manager.get_items()))
             count = len(new_items)
@@ -125,8 +173,25 @@ class App:
                 self.window.print("Nothing found")
         elif c in ':':
             command = self.window.input(': ')
-            self.window.print("Try to execute " + command + " with " + str(self.window.get_current_item()))
+            self.executor.run_command(command)
 
+    def switch_manager(self, key):
+        if key in 'f':
+            if self.manager is self.file_manager: return
+            self.manager = self.file_manager
+        elif key in 'a':
+            if self.manager is self.all_manager: return
+            self.manager = self.all_manager
+        elif key in 't':
+            if self.manager is self.tag_manager: return
+            self.manager = self.tag_manager
+        else: return False
+
+        EventQueue.push(('root',))
+        return True
+
+    def print(self, text):
+        self.window.print(text)
 
 if __name__ == '__main__':
     config = get_config()
