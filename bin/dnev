@@ -11,7 +11,9 @@ from dnevnichok.aux import EventQueue
 from dnevnichok.core import Item, NoteItem, DirItem, TagItem
 from dnevnichok.helpers import get_config
 from dnevnichok.managers import AllManager, FileManager, TagManager
-from dnevnichok.ui import ItemList, MainWindow
+from dnevnichok.populate import repopulate_db
+from dnevnichok.ui import MainWindow
+
 
 locale.setlocale(locale.LC_ALL, '')
 code = locale.getpreferredencoding()
@@ -31,6 +33,8 @@ class App:
         dbpath = os.path.abspath(os.path.expanduser(config.get('Paths', 'db')))
         notespath = os.path.abspath(os.path.expanduser(config.get('Paths', 'notes')))
         os.chdir(notespath)
+        if not os.path.exists(dbpath):
+            repopulate_db()
 
         self.file_manager = FileManager(1, dbpath)
         self.tag_manager = TagManager(dbpath)
@@ -91,7 +95,6 @@ class App:
         if type(c) is not str:
             return
         if c in 'r':    # if populate_db(c)
-            from dnevnichok.populate import repopulate_db
             repopulate_db()
         elif c in 'QqЙй':
             return 'exit'

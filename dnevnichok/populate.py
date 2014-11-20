@@ -4,7 +4,7 @@
 Module contain one-run procedures and helpers for parse whole library
 """
 
-from collections import deque, OrderedDict
+from collections import OrderedDict
 from docutils.core import publish_doctree
 from docutils.utils import SystemMessage
 import logging

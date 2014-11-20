@@ -1,6 +1,5 @@
 from datetime import datetime
 import curses
-import os
 import logging
 
 logging.basicConfig(filename='noter.log')

@@ -8,7 +8,7 @@ from collections import deque
 import logging
 import sqlite3
 
-from dnevnichok.core import Item, DirItem, NoteItem, TagItem
+from dnevnichok.core import DirItem, NoteItem, TagItem
 
 logging.basicConfig(filename='noter.log')
 
