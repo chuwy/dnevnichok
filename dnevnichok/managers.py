@@ -35,6 +35,19 @@ class FileManager(ManagerInterface):
         self.chpath(root_path)
         self._conn = sqlite3.connect(dbpath)
 
+    def get_current_path(self):
+        with self._conn:
+            cur = self._conn.cursor()
+            cur.execute("""SELECT d.title
+                           FROM dirs_path AS dp
+                           JOIN dirs as d
+                           ON dp.ancestor == d.id
+                           WHERE descendant = {}
+                           ORDER BY d.id ASC""".format(str(self.base)))
+            parents = map(lambda p: p[0], cur.fetchall())
+            path = '/'.join(parents)
+            return path
+
     def root(self):
         self.chpath(self.root_path)
 
