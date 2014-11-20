@@ -121,6 +121,8 @@ class App:
         elif isinstance(item, NoteItem):
             subprocess.call(["vi", item.get_path()])
             active = item
+            curses.curs_set(1)  # THIS is sought-for hack 
+            curses.curs_set(0)
 
         items = self.manager.get_items()
         last_active_index = items.index(active) if active else 0
