@@ -65,13 +65,19 @@ class NoteItem(ItemInterface):
     def __init__(self, item_id, **kwargs):
         super().__init__(item_id, **kwargs)
         if not self.real_title and self.title.find('diary_') >= 0:
-            self.title = datetime.strptime(self.title, 'diary_%d-%m-%Y.rst').strftime('Дневничок от %d %B %Y')
+            try:
+                self.title = datetime.strptime(self.title, 'diary_%d-%m-%Y.rst').strftime('Дневничок от %d %B %Y')
+            except ValueError:
+                pass
 
     def get_size(self):
         return self.size
 
     def get_path(self):
-        return self.path
+        if self.path.startswith('./'):
+            return self.path[2:]
+        else:
+            return self.path
 
     def get_color(self):
         if self.real_title:
