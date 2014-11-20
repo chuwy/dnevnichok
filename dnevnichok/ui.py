@@ -46,7 +46,7 @@ class ItemList:
 
     def render_item(self, position, item, reverse=False):
         def render_view(view):
-            return polute(view[0], self.width-20, False) + polute(view[1], 12)[:self.width]
+            return polute(view[0], self.width-13, False) + polute(view[1], 12)[:self.width]
         view = item.get_view()
         if reverse:
             self.scr.addstr(position, 0, render_view(view), curses.A_REVERSE)
@@ -138,9 +138,9 @@ class InfoBar:
         self.Y = height - 2
 
     def render_item_info(self, item):
-        self.print(polute(item.get_size(), 8) +
+        self.print(polute(item.get_path(), 30, False) +
                    polute(' ', 2) +
-                   polute(item.get_path(), 30))
+                   polute(item.get_size(), 8))
 
     def print(self, text):
         if text:
@@ -149,7 +149,7 @@ class InfoBar:
     def input(self, prompt=''):
         curses.echo()
         self.print(prompt)
-        input = self.scr.getstr(self.Y, len(prompt), 20).decode('unicode_escape')
+        input = self.scr.getstr(self.Y, len(prompt), 40).decode('unicode_escape')
         curses.noecho()
         self.clear()
         return input

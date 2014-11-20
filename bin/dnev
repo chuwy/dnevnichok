@@ -9,9 +9,10 @@ import subprocess
 
 from dnevnichok.aux import EventQueue
 from dnevnichok.core import Item, NoteItem, DirItem, TagItem
-from dnevnichok.commands import get_all_commands
+from dnevnichok.commands import get_all_commands, InsufficientArguments
 from dnevnichok.helpers import get_config
 from dnevnichok.managers import AllManager, FileManager, TagManager
+from dnevnichok.populate import repopulate_db
 from dnevnichok.ui import ItemList, MainWindow
 
 locale.setlocale(locale.LC_ALL, '')
@@ -40,16 +41,21 @@ class Executor:
         try:
             Command = self.commands[command]
         except KeyError:
-            self.app.window.print("Unknown command: " + command)
+            self.print("Unknown command: " + command)
             return
 
-        execution = Command(self, args)
+        try:
+            execution = Command(self, args)
+        except InsufficientArguments as e:
+            self.print(e.message)
+            return
+
         execution.fill_args()
         proceed = execution.ensure()
         if proceed:
             output = execution.run()
         if output:
-            self.app.print(output)
+            self.print(output)
 
     def ensure(self, text, tries=0):
         choice = self.app.window.input(text)
@@ -65,6 +71,9 @@ class Executor:
 
     def get_current_item(self):
         return self.app.window.get_current_item()
+
+    def print(self, message):
+        self.app.print(message)
 
 
 class App:
@@ -145,29 +154,12 @@ class App:
         """ May return a text signal to mainloop """
         if type(c) is not str:
             return
-        if c in 'r':    # if populate_db(c)
-            from dnevnichok.populate import repopulate_db
+        if c in 'QqЙй': return 'exit'
+        elif c in 'Rr':
             repopulate_db()
             EventQueue.push(('reload',))
-        elif c in 'QqЙй':
-            return 'exit'
-        elif c in 'f':      # MANAGER   if switch_manager(c): return
-                            # switch_manager knows about keybindings
-            if self.manager is self.file_manager:
-                return
-            self.manager = self.file_manager
-            EventQueue.push(('root',))
-        elif c in 'a':      # MANAGER
-            if self.manager is self.all_manager:
-                return
-            self.manager = self.all_manager
-            EventQueue.push(('root',))
-        elif c in 't':      # MANAGER
-            if self.manager is self.tag_manager:
-                return
-            self.manager = self.tag_manager
-            EventQueue.push(('root',))
-        elif c in '/':
+        elif self.switch_manager(c): return
+        elif c in '/':      # TODO: rewrite as filter command
             search = self.window.input('/ ')
             new_items = list(filter(lambda q: q.title.find(search) >= 0, self.manager.get_items()))
             count = len(new_items)
@@ -180,6 +172,23 @@ class App:
             command = self.window.input(': ')
             self.executor.run_command(command)
 
+    def switch_manager(self, key):
+        if key in 'f':
+            if self.manager is self.file_manager: return
+            self.manager = self.file_manager
+        elif key in 'a':
+            if self.manager is self.all_manager: return
+            self.manager = self.all_manager
+        elif key in 't':
+            if self.manager is self.tag_manager: return
+            self.manager = self.tag_manager
+        else: return False
+
+        EventQueue.push(('root',))
+        return True
+
+    def print(self, text):
+        self.window.print(text)
 
 if __name__ == '__main__':
     config = get_config()
