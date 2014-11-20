@@ -72,11 +72,10 @@ class FileManager(ManagerInterface):
     def get_items(self):
         with self._conn:
             cur = self._conn.cursor()
-            cur.execute("""SELECT dirs_path.descendant, n.title, n.size
-                           FROM dirs
-                           JOIN dirs_path     ON dirs_path.ancestor = dirs.id
-                           JOIN dirs as n     ON dirs_path.descendant = n.id
-                           WHERE dirs_path.direct = 1 and dirs_path.ancestor = {}""".format(str(self.base)))
+            cur.execute("""SELECT d.id, d.title, d.size
+                           FROM dirs_path AS dp
+                           LEFT JOIN dirs AS d ON dp.descendant = d.id
+                           WHERE dp.direct = 1 and dp.ancestor = {}""".format(str(self.base)))
             dirs = cur.fetchall()
             cur.execute("""SELECT n.id, n.title, n.size, n.full_path, n.pub_date, n.mod_date, n.real_title
                            FROM notes AS n
