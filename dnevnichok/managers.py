@@ -85,7 +85,6 @@ class FileManager(ManagerInterface):
                    sorted([NoteItem(t[0], title=t[1], size=t[2], path=t[3], pub_date=t[4], mod_date=t[5], real_title=t[6]) for t in notes], key=lambda i: i.pub_date, reverse=True)
 
 
-
 class TagManager(ManagerInterface):
     def __init__(self, dbpath):
         self._conn = sqlite3.connect(dbpath)

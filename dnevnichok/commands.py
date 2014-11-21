@@ -74,6 +74,7 @@ class newCommand(Command):
                 cur.execute("""INSERT INTO notes(title, real_title, full_path, pub_date, mod_date, size, dir_id)
                             VALUES(?, ?, ?, ?, ?, ?, ?)""",
                             (note.get_title(), note.real_title, note.path, note.pub_date, note.mod_date, note.get_size(), note.dir_id))
+                note.id = cur.lastrowid
                 for tag in note.tags:
                     cur.execute("INSERT OR IGNORE INTO tags(title) VALUES(?)", (tag,))
                     cur.execute("INSERT INTO note_tags(note_id, tag_id) VALUES(?, ?)", (note.id, cur.lastrowid,))

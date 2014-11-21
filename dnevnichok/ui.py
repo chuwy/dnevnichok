@@ -57,8 +57,8 @@ class ItemList:
 
     def switch_items(self, items, cur_item=0):
         """ Switch items e.g. on change directory """
-        self.cur_item = cur_item
-        self._items = PagedItems(items, self.Y)
+        self.cur_item = cur_item - self.Y * (cur_item // self.Y)
+        self._items = PagedItems(items, self.Y, cur_item)
         self.scr.clear()
         self.render()
 
