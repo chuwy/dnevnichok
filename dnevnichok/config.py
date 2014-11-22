@@ -3,13 +3,6 @@ from os import getenv, makedirs
 from os.path import abspath, dirname, exists, expanduser, join, realpath
 
 
-def _get_config(configfile=None):
-    """ Fallback method. Deprecated """
-    c = Config(configfile)
-    return c.config
-get_config = _get_config
-
-
 class Config:
     """
     Responsible for getting configuration from specific path or communicate with
@@ -73,6 +66,7 @@ class Config:
         logpath = input("Specify dir, where you would like to keep debug log.\n"
                         "(default is ~/.dnevnichok.log): ")
         logpath = logpath if logpath and not logpath.isspace() else default_logpath
+        self.config['Paths']['log'] = logpath
 
         with open(self.configpath, 'w') as configfile:
             self.config.write(configfile)

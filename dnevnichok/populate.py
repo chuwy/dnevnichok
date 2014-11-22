@@ -12,10 +12,9 @@ import os
 from os.path import join, isdir
 import sqlite3
 
-from dnevnichok.helpers import get_config
 from dnevnichok.backend import GitCommandBackend
+from dnevnichok.config import Config
 
-logging.basicConfig(filename='noter.log')
 
 try:
     import colored_traceback
@@ -23,10 +22,10 @@ try:
 except ImportError:
     pass
 
-
-config = get_config()
-dbpath = os.path.abspath(os.path.expanduser(config.get('Paths', 'db')))
-notespath = os.path.abspath(os.path.expanduser(config.get('Paths', 'notes')))
+config = Config()
+logging.basicConfig(filename=config.get_path('log'))
+dbpath = config.get_path('db')
+notespath = config.get_path('notes')
 repo = GitCommandBackend(notespath)
 
 

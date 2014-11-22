@@ -5,12 +5,12 @@ import inspect
 import logging
 
 from dnevnichok.aux import EventQueue
-from dnevnichok.helpers import get_config
+from dnevnichok.config import Config
 from dnevnichok.populate import parse_note
 
 
-config = get_config()
-dbpath = os.path.abspath(os.path.expanduser(config.get('Paths', 'db')))
+config = Config()
+dbpath = config.get_path('db')
 
 
 class InsufficientArguments(Exception):

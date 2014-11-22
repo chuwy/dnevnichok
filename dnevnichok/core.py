@@ -3,7 +3,11 @@ import curses
 import os
 import logging
 
-logging.basicConfig(filename='noter.log')
+from dnevnichok.config import Config
+
+
+config = Config()
+logging.basicConfig(filename=config.get_path('log'))
 
 
 class ItemInterface:

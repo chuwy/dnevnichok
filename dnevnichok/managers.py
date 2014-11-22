@@ -9,8 +9,11 @@ import logging
 import sqlite3
 
 from dnevnichok.core import Item, DirItem, NoteItem, TagItem
+from dnevnichok.config import Config
 
-logging.basicConfig(filename='noter.log')
+
+config = Config()
+logging.basicConfig(filename=config.get_path('log'))
 
 
 class ManagerInterface:

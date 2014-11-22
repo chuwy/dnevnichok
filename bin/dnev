@@ -10,7 +10,7 @@ import subprocess
 from dnevnichok.aux import EventQueue
 from dnevnichok.core import Item, NoteItem, DirItem, TagItem
 from dnevnichok.commands import get_all_commands, InsufficientArguments
-from dnevnichok.helpers import Config
+from dnevnichok.config import Config
 from dnevnichok.managers import AllManager, FileManager, TagManager
 from dnevnichok.populate import repopulate_db
 from dnevnichok.ui import ItemList, MainWindow
