@@ -10,7 +10,7 @@ import subprocess
 from dnevnichok.aux import EventQueue
 from dnevnichok.core import Item, NoteItem, DirItem, TagItem
 from dnevnichok.commands import get_all_commands, InsufficientArguments
-from dnevnichok.helpers import get_config
+from dnevnichok.helpers import Config
 from dnevnichok.managers import AllManager, FileManager, TagManager
 from dnevnichok.populate import repopulate_db
 from dnevnichok.ui import ItemList, MainWindow
@@ -18,7 +18,9 @@ from dnevnichok.ui import ItemList, MainWindow
 locale.setlocale(locale.LC_ALL, '')
 code = locale.getpreferredencoding()
 
-logging.basicConfig(filename='noter.log')
+config = Config()
+logpath = config.get_path('log')
+logging.basicConfig(filename=logpath)
 
 try:
     import colored_traceback
@@ -79,8 +81,8 @@ class Executor:
 class App:
     """ App manages main window, managers, process events from underlying UI"""
     def __init__(self, stdscr):
-        dbpath = os.path.abspath(os.path.expanduser(config.get('Paths', 'db')))
-        notespath = os.path.abspath(os.path.expanduser(config.get('Paths', 'notes')))
+        dbpath = config.get_path('db')
+        notespath = config.get_path('notes')
         os.chdir(notespath)
 
         self.executor = Executor(self)
@@ -191,7 +193,6 @@ class App:
         self.window.print(text)
 
 if __name__ == '__main__':
-    config = get_config()
     curses.wrapper(App)
     print("Closing dnevnichok. See you later.")
     sys.exit(0)
