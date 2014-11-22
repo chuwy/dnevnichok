@@ -10,7 +10,8 @@ import sqlite3
 
 from dnevnichok.core import DirItem, NoteItem, TagItem
 
-logging.basicConfig(filename='noter.log')
+
+logger = logging.getLogger(__name__)
 
 
 class ManagerInterface:
@@ -72,11 +73,10 @@ class FileManager(ManagerInterface):
     def get_items(self):
         with self._conn:
             cur = self._conn.cursor()
-            cur.execute("""SELECT dirs_path.descendant, n.title, n.size
-                           FROM dirs
-                           JOIN dirs_path     ON dirs_path.ancestor = dirs.id
-                           JOIN dirs as n     ON dirs_path.descendant = n.id
-                           WHERE dirs_path.direct = 1 and dirs_path.ancestor = {}""".format(str(self.base)))
+            cur.execute("""SELECT d.id, d.title, d.size
+                           FROM dirs_path AS dp
+                           LEFT JOIN dirs AS d ON dp.descendant = d.id
+                           WHERE dp.direct = 1 and dp.ancestor = {}""".format(str(self.base)))
             dirs = cur.fetchall()
             cur.execute("""SELECT n.id, n.title, n.size, n.full_path, n.pub_date, n.mod_date, n.real_title
                            FROM notes AS n
@@ -84,7 +84,6 @@ class FileManager(ManagerInterface):
             notes = cur.fetchall()
             return [DirItem(t[0], title=t[1], path=t[1], size=t[2]) for t in dirs] + \
                    sorted([NoteItem(t[0], title=t[1], size=t[2], path=t[3], pub_date=t[4], mod_date=t[5], real_title=t[6]) for t in notes], key=lambda i: i.pub_date, reverse=True)
-
 
 
 class TagManager(ManagerInterface):

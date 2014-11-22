@@ -12,10 +12,9 @@ import os
 from os.path import join, isdir
 import sqlite3
 
-from dnevnichok.helpers import get_config
 from dnevnichok.backend import GitCommandBackend
+from dnevnichok.config import Config
 
-logging.basicConfig(filename='noter.log')
 
 try:
     import colored_traceback
@@ -23,10 +22,11 @@ try:
 except ImportError:
     pass
 
+logger = logging.getLogger(__name__)
 
-config = get_config()
-dbpath = os.path.abspath(os.path.expanduser(config.get('Paths', 'db')))
-notespath = os.path.abspath(os.path.expanduser(config.get('Paths', 'notes')))
+config = Config()
+dbpath = config.get_path('db')
+notespath = config.get_path('notes')
 repo = GitCommandBackend(notespath)
 
 
@@ -149,9 +149,9 @@ def pollute_dirs_and_notes(notespath, dbpath):
                 try:
                     notes.append(parse_note(join(root, f), root_dir.i))
                 except UnicodeDecodeError:      # TODO: add error to DB
-                    logging.warn("so here is unicode error: " + join(root, f))
+                    logger.warn("so here is unicode error: " + join(root, f))
                 except SystemMessage:
-                    logging.warn("and here is other error: " + join(root, f))
+                    logger.warn("and here is other error: " + join(root, f))
 
     populate_db_with_notes(notes, notespath, dbpath)
 

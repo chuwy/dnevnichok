@@ -2,7 +2,7 @@ from datetime import datetime
 import curses
 import logging
 
-logging.basicConfig(filename='noter.log')
+logger = logging.getLogger(__name__)
 
 
 class ItemInterface:

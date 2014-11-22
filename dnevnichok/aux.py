@@ -3,14 +3,14 @@ from collections import UserList, deque
 
 class PagedItems(UserList):
     """ Stores everything, but only one page (slice) available at the moment"""
-    def __init__(self, initlist=None, lines=None):
+    def __init__(self, initlist=None, lines=None, start_element=None):
         if not lines:
             raise TypeError("You must provide lines arg")
         else:
-            self._lines = lines
+            self._lines = lines     # how much element are shown
         super().__init__(initlist)
         self._unpaged = True
-        self.page = 1
+        self.page = 1 if not start_element else start_element // self._lines + 1
         self.set_page(self.page)
 
     def set_page(self, page):
