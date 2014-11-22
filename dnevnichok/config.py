@@ -1,6 +1,48 @@
 import configparser
+import logging.config
 from os import getenv, makedirs
 from os.path import abspath, dirname, exists, expanduser, join, realpath
+
+
+def setup_logging():
+    logging.config.dictConfig({
+        'version': 1,
+        'disable_existing_loggers': False,
+        'formatters': {
+            'standard': {
+                'format': '%(levelname)s %(asctime)s %(module)s:%(lineno)d %(message)s',
+                'datefmt': '%H:%M:%S'
+            },
+            'only_message': {
+                'format': '%(message)s',
+            },
+        },
+        'handlers': {
+            'default': {
+                'level':'DEBUG',
+                'class':'logging.FileHandler',
+                'formatter': 'standard',
+                'filename': config.get_path('log'),
+            },
+            'console': {
+                'level':'INFO',
+                'class':'logging.StreamHandler',
+                'formatter': 'only_message',
+            },
+        },
+        'loggers': {
+            '': {
+                'handlers': ['default'],
+                'level': 'DEBUG',
+                'propagate': True
+            },
+            '__main__': {
+                'handlers': ['default', 'console'],
+                'level': 'INFO',
+                'propagate': False
+            }
+        }
+    })
 
 
 class Config:
@@ -74,3 +116,6 @@ class Config:
     def get(self, section, option, fallback):
         """ Fallback method """
         return self.config(section, option, fallback=fallback)
+
+
+config = Config()

@@ -11,6 +11,7 @@ from dnevnichok.populate import parse_note
 
 config = Config()
 dbpath = config.get_path('db')
+logger = logging.getLogger(__name__)
 
 
 class InsufficientArguments(Exception):

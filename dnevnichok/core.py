@@ -3,11 +3,7 @@ import curses
 import os
 import logging
 
-from dnevnichok.config import Config
-
-
-config = Config()
-logging.basicConfig(filename=config.get_path('log'))
+logger = logging.getLogger(__name__)
 
 
 class ItemInterface:
