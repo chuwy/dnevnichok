@@ -116,7 +116,7 @@ class Config:
 
     def get(self, section, option, fallback):
         """ Fallback method """
-        return self.config(section, option, fallback=fallback)
+        return self.config.get(section, option, fallback=fallback)
 
 
 config = Config()

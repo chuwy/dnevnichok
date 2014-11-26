@@ -47,15 +47,16 @@ class ItemList:
         view = item.get_view()
         if reverse:
             self.scr.addstr(position, 0, render_view(view), curses.A_REVERSE)
-            self.onHightlight(item=item)
+            self.on_hightlight(item=item)
         else:
             self.scr.addstr(position, 0, render_view(view), item.get_color())
         self.scr.refresh()
 
     def switch_items(self, items, cur_item=0):
         """ Switch items e.g. on change directory """
+        start_page = cur_item // self.Y + 1
         self.cur_item = cur_item - self.Y * (cur_item // self.Y)
-        self._items = PagedItems(items, self.Y, cur_item)
+        self._items = PagedItems(items, self.Y, start_page)
         self.scr.clear()
         self.render()
 
@@ -91,7 +92,7 @@ class ItemList:
         self.move_highlight(i)
         self.cur_item = i
 
-    def onHightlight(self, func=None, item=None):
+    def on_hightlight(self, func=None, item=None):
         """
         With func argument it adds a callback. With item it sequentally run
         every added callback.
@@ -174,7 +175,7 @@ class MainWindow:
         subwin = self.stdscr.subwin(stdscr_y - 3, stdscr_x, 0, 0)
 
         self.left_pane = ItemList(subwin)
-        self.left_pane.onHightlight(func=self.bar.render_item_info)
+        self.left_pane.on_hightlight(func=self.bar.render_item_info)
 
     def print(self, text):
         self.bar.print(text)

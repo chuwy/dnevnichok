@@ -57,8 +57,8 @@ class Executor:
         proceed = execution.ensure()
         if proceed:
             output = execution.run()
-        if output:
-            self.print(output)
+            if output:
+                self.print(output)
 
     def ensure(self, text, tries=0):
         choice = self.app.window.input(text)
@@ -93,7 +93,7 @@ class App:
         self.tag_manager = TagManager(dbpath)
         self.all_manager = AllManager(dbpath)
         self.favorites_manager = FavoritesManager(dbpath)
-        self.manager = self.file_manager        # current manager
+        self.manager = self.all_manager        # current manager
         items = self.manager.get_items()
         self.window = MainWindow(stdscr)
         self.window.show_items(items)

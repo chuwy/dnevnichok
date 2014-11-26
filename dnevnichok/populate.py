@@ -82,7 +82,6 @@ def parse_note(path, dir_id):
                 tags_line = field.getElementsByTagName('field_body')[0].childNodes[0].firstChild.nodeValue
                 note_info.tags = tags_line.split(', ')
             if field.getElementsByTagName('field_name')[0].firstChild.nodeValue == 'favorite':
-                logger.warn(note_info.get_title())
                 note_info.favorite = True
 
         return note_info
