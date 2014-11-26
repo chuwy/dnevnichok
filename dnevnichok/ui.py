@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import curses
 
 from dnevnichok.aux import PagedItems, EventQueue

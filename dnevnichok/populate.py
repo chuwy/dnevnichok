@@ -35,6 +35,7 @@ class NoteInfo:
         self.dir_id = dir_id
         self.title = None
         self.real_title = False
+        self.favorite = False
         self.tags = []
 
     def set_title(self, title):
@@ -80,6 +81,9 @@ def parse_note(path, dir_id):
             if field.getElementsByTagName('field_name')[0].firstChild.nodeValue == 'tags':
                 tags_line = field.getElementsByTagName('field_body')[0].childNodes[0].firstChild.nodeValue
                 note_info.tags = tags_line.split(', ')
+            if field.getElementsByTagName('field_name')[0].firstChild.nodeValue == 'favorite':
+                logger.warn(note_info.get_title())
+                note_info.favorite = True
 
         return note_info
 
@@ -107,7 +111,7 @@ def pollute_dirs_and_notes(notespath, dbpath):
             """ Return list of ids for all parent directories """
             parents = []
             cur_path = full_path
-            for d, parent in enumerate(full_path.split('/')[:-1]):
+            for _ in full_path.split('/')[:-1]:
                 cur_path = os.path.dirname(cur_path)
                 parents.append(cur_path)
             return map(lambda p: added_roots[p], parents)
@@ -227,7 +231,7 @@ def populate_db_with_notes(notes, notespath, dbpath):
                        tags(id INTEGER PRIMARY KEY, title TEXT UNIQUE)""")
 
         cur.execute("""CREATE TABLE IF NOT EXISTS
-                       notes(id INTEGER PRIMARY KEY, title TEXT, real_title INTEGER, full_path TEXT, pub_date TEXT, mod_date TEXT, size INT, dir_id INTEGER,
+                       notes(id INTEGER PRIMARY KEY, title TEXT, real_title INTEGER, full_path TEXT, pub_date TEXT, mod_date TEXT, size INT, dir_id INTEGER, favorite INTEGER,
                        FOREIGN KEY(dir_id) REFERENCES dirs(id))""")
 
         cur.execute("""CREATE TABLE IF NOT EXISTS
@@ -235,9 +239,9 @@ def populate_db_with_notes(notes, notespath, dbpath):
                        FOREIGN KEY(note_id) REFERENCES notes(id), FOREIGN KEY(tag_id) REFERENCES tags(id))""")
 
         for note in notes:
-            cur.execute("""INSERT INTO notes(title, real_title, full_path, pub_date, mod_date, size, dir_id)
-                           VALUES(?, ?, ?, ?, ?, ?, ?)""",
-                           (note.get_title(), note.real_title, note.path, note.pub_date, note.mod_date, note.get_size(), note.dir_id))
+            cur.execute("""INSERT INTO notes(title, real_title, full_path, pub_date, mod_date, size, dir_id, favorite)
+                           VALUES(?, ?, ?, ?, ?, ?, ?, ?)""",
+                           (note.get_title(), note.real_title, note.path, note.pub_date, note.mod_date, note.get_size(), note.dir_id, note.favorite))
             note.id = cur.lastrowid
             for tag in note.tags:
                 cur.execute("INSERT OR IGNORE INTO tags(title) VALUES(?)", (tag,))

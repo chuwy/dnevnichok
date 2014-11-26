@@ -78,12 +78,12 @@ class FileManager(ManagerInterface):
                            LEFT JOIN dirs AS d ON dp.descendant = d.id
                            WHERE dp.direct = 1 and dp.ancestor = {}""".format(str(self.base)))
             dirs = cur.fetchall()
-            cur.execute("""SELECT n.id, n.title, n.size, n.full_path, n.pub_date, n.mod_date, n.real_title
+            cur.execute("""SELECT n.id, n.title, n.size, n.full_path, n.pub_date, n.mod_date, n.real_title, n.favorite
                            FROM notes AS n
                            WHERE n.dir_id = {}""".format(self.base))
             notes = cur.fetchall()
             return [DirItem(t[0], title=t[1], path=t[1], size=t[2]) for t in dirs] + \
-                   sorted([NoteItem(t[0], title=t[1], size=t[2], path=t[3], pub_date=t[4], mod_date=t[5], real_title=t[6]) for t in notes], key=lambda i: i.pub_date, reverse=True)
+                   sorted([NoteItem(t[0], title=t[1], size=t[2], path=t[3], pub_date=t[4], mod_date=t[5], real_title=t[6], favorite=t[7]) for t in notes], key=lambda i: i.pub_date, reverse=True)
 
 
 class TagManager(ManagerInterface):
@@ -136,7 +136,26 @@ class AllManager(ManagerInterface):
     def get_items(self):
         with self._conn:
             cur = self._conn.cursor()
-            cur.execute("SELECT id, title, full_path, pub_date, mod_date, size, real_title FROM notes")
+            cur.execute("SELECT id, title, full_path, pub_date, mod_date, size, real_title, favorite FROM notes")
+            rows = cur.fetchall()
+            return sorted([NoteItem(t[0], title=t[1], path=t[2], pub_date=t[3], mod_date=t[4], size=t[5], real_title=t[6], favorite=t[7]) for t in rows], key=lambda i: i.pub_date, reverse=True)
+
+    def root(self): pass
+
+    def parent(self): pass
+
+    def chpath(self, tag): pass
+
+
+class FavoritesManager(ManagerInterface):
+    def __init__(self, dbpath):
+        self._conn = sqlite3.connect(dbpath)
+        self.base = None
+
+    def get_items(self):
+        with self._conn:
+            cur = self._conn.cursor()
+            cur.execute("SELECT id, title, full_path, pub_date, mod_date, size, real_title FROM notes WHERE favorite=1")
             rows = cur.fetchall()
             return sorted([NoteItem(t[0], title=t[1], path=t[2], pub_date=t[3], mod_date=t[4], size=t[5], real_title=t[6]) for t in rows], key=lambda i: i.pub_date, reverse=True)
 

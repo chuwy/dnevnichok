@@ -8,10 +8,10 @@ import logging
 import subprocess
 
 from dnevnichok.aux import EventQueue
-from dnevnichok.core import Item, NoteItem, DirItem, TagItem
+from dnevnichok.core import NoteItem, DirItem, TagItem
 from dnevnichok.commands import get_all_commands, InsufficientArguments
 from dnevnichok.config import Config, setup_logging
-from dnevnichok.managers import AllManager, FileManager, TagManager
+from dnevnichok.managers import AllManager, FavoritesManager, FileManager, TagManager
 from dnevnichok.populate import repopulate_db
 from dnevnichok.ui import MainWindow
 
@@ -92,6 +92,7 @@ class App:
         self.file_manager = FileManager(1, dbpath)
         self.tag_manager = TagManager(dbpath)
         self.all_manager = AllManager(dbpath)
+        self.favorites_manager = FavoritesManager(dbpath)
         self.manager = self.file_manager        # current manager
         items = self.manager.get_items()
         self.window = MainWindow(stdscr)
@@ -122,9 +123,9 @@ class App:
         last_active = self.manager.parent()
         if not last_active:
             return
-        hint = 'tag' if self.manager is self.tag_manager else None
+        item = TagItem(last_active) if self.manager is self.tag_manager else DirItem(last_active)
         items = self.manager.get_items()
-        last_active_index = items.index(Item(last_active, hint))
+        last_active_index = items.index(item)
         self.window.show_items(items, last_active_index)
 
     def process_open(self, ev):
@@ -187,6 +188,9 @@ class App:
         elif key in 't':
             if self.manager is self.tag_manager: return
             self.manager = self.tag_manager
+        elif key in 'F':
+            if self.manager is self.favorites_manager: return
+            self.manager = self.favorites_manager
         else: return False
 
         EventQueue.push(('root',))

@@ -12,19 +12,14 @@ class ItemInterface:
     Now also responsible for navigating
     id = DB pk or another way to 100% identify object and thus navigate to it
          by manager and also get all info. Single required arg
-    title = will be named almost everywhere
-    path? = used by chpath() in managers if id isn't appropriate
-    name_  = filename if need
-    size!
-    color
+    All other will be setted as attributes
     """
     def __init__(self, item_id, **kwargs):
         self.id = item_id
         self.__dict__.update(kwargs)
 
-    def get_view(self):
-        return (self.title, self.get_size())
-
+    def get_view(self): return self.title, self.get_size()
+    def get_size(self): return 0
     def get_color(self): return curses.color_pair(3)
     def __repr__(self): return self.category + ' ' + self.title
     def __eq__(self, other):
@@ -62,6 +57,7 @@ class NoteItem(ItemInterface):
     category = 'note'
 
     def __init__(self, item_id, **kwargs):
+        self.favorite = False
         super().__init__(item_id, **kwargs)
         if not self.real_title and self.title.find('diary_') >= 0:
             try:
@@ -79,10 +75,12 @@ class NoteItem(ItemInterface):
             return self.path
 
     def get_color(self):
-        if self.real_title:
+        if self.favorite:
             return curses.color_pair(6)
-        else:
+        elif self.real_title:
             return curses.color_pair(2)
+        else:
+            return curses.color_pair(1)
 
     def get_mod_date(self):
         try:
@@ -105,18 +103,3 @@ class DateItem(ItemInterface):
 
     def __init__(self, date_id):
         date = datetime.strptime(date_id, '%Y-%m-%dT%H:%M:%S.%fZ')
-
-
-def Item(path, hint=None):
-    """
-    Item factory function. Decides which category current item belongs.
-    If item match no criteria it returns None and can be considered to filter
-    out this item.
-    """
-    if hint:
-        if hint == 'tag':   return TagItem(path)
-        if hint == 'dir':   return DirItem(path)
-        if hint == 'date':  return DateItem(path)
-        if hint == 'note':  return NoteItem(path)
-
-    return DirItem(path)
