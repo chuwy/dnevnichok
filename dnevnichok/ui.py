@@ -48,10 +48,12 @@ class ItemList:
             return polute(view[0], self.width-13, False) + polute(view[1], 12)[:self.width]
         view = item.get_view()
         if reverse:
-            self.scr.addstr(position, 0, render_view(view), curses.A_REVERSE)
-            self.onHightlight(item=item)
+            color = curses.color_pair(item.get_color()+12)
         else:
-            self.scr.addstr(position, 0, render_view(view), item.get_color())
+            color = curses.color_pair(item.get_color())
+        self.scr.addstr(position, 0, render_view(view), color)
+        self.onHightlight(item=item)
+
         self.scr.refresh()
 
     def switch_items(self, items, cur_item=0):
@@ -137,13 +139,14 @@ class InfoBar:
         self.Y = height - 2
 
     def render_item_info(self, item):
+        remain = self.width - 32
         self.print(polute(item.get_path(), 30, False) +
                    polute(' ', 2) +
-                   polute(item.get_size(), 8))
+                   polute(item.get_size(), remain))
 
     def print(self, text):
         if text:
-            self.scr.addstr(self.Y, 1, str(text))
+            self.scr.addstr(self.Y, 0, str(text), curses.color_pair(20))
 
     def input(self, prompt=''):
         curses.echo()
@@ -163,14 +166,21 @@ class MainWindow:
         self.stdscr = scr
         self.stdscr.clear()
         curses.curs_set(0)
-        if curses.has_colors():
-            curses.init_pair(1, curses.COLOR_BLUE, 0)
-            curses.init_pair(2, curses.COLOR_CYAN, 0)
-            curses.init_pair(3, curses.COLOR_GREEN, 0)
-            curses.init_pair(4, curses.COLOR_MAGENTA, 0)
-            curses.init_pair(5, curses.COLOR_RED, 0)
-            curses.init_pair(6, curses.COLOR_YELLOW, 0)
-            curses.init_pair(7, curses.COLOR_WHITE, 0)
+
+        curses.use_default_colors()
+        curses.init_pair(1, 0, 0)
+        curses.init_pair(2, 33, 0)      # dirs
+        curses.init_pair(14, 0, 33)
+        curses.init_pair(3, 71, 0)      # notes with titles
+        curses.init_pair(15, 0, 71)
+        curses.init_pair(4, 72, 0)      # notes without titles
+        curses.init_pair(16, 0, 72)
+        curses.init_pair(5, 99, 0)      # tags
+        curses.init_pair(17, 0, 99)
+        curses.init_pair(6, 184, 0)     # favorites
+        curses.init_pair(18, 0, 184)
+
+        curses.init_pair(20, 15, 234)   # bar
         self.bar = InfoBar(scr)
         stdscr_y, stdscr_x = self.stdscr.getmaxyx()
         subwin = self.stdscr.subwin(stdscr_y - 3, stdscr_x, 0, 0)

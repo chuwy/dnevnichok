@@ -26,7 +26,7 @@ class ItemInterface:
     def get_view(self):
         return (self.title, self.get_size())
 
-    def get_color(self): return curses.color_pair(3)
+    def get_color(self): return 1
     def __repr__(self): return self.category + ' ' + self.title
     def __eq__(self, other):
         if self.category != other.category: return False
@@ -43,7 +43,7 @@ class TagItem(ItemInterface):
         return self.title
 
     def get_color(self):
-        return curses.color_pair(4)
+        return 5
 
 
 class DirItem(ItemInterface):
@@ -56,7 +56,7 @@ class DirItem(ItemInterface):
         return self.title
 
     def get_color(self):
-        return curses.color_pair(5)
+        return 2
 
 
 class NoteItem(ItemInterface):
@@ -81,9 +81,9 @@ class NoteItem(ItemInterface):
 
     def get_color(self):
         if self.real_title:
-            return curses.color_pair(6)
+            return 3
         else:
-            return curses.color_pair(2)
+            return 4
 
     def get_mod_date(self):
         try:

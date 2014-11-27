@@ -19,8 +19,6 @@ locale.setlocale(locale.LC_ALL, '')
 code = locale.getpreferredencoding()
 
 config = Config()
-logpath = config.get_path('log')
-logging.basicConfig(filename=logpath)
 
 try:
     import colored_traceback
