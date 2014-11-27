@@ -8,7 +8,7 @@ from collections import deque
 import logging
 import sqlite3
 
-from dnevnichok.core import Item, DirItem, NoteItem, TagItem
+from dnevnichok.core import DirItem, NoteItem, TagItem
 
 
 logger = logging.getLogger(__name__)
@@ -30,11 +30,12 @@ class ManagerInterface:
 
 class FileManager(ManagerInterface):
     def __init__(self, root_path, dbpath):
+        self._conn = sqlite3.connect(dbpath)
+        self._conn.row_factory = sqlite3.Row
         self._bases = deque()
         self.root_path = root_path
         self.base = root_path
         self.chpath(root_path)
-        self._conn = sqlite3.connect(dbpath)
 
     def get_current_path(self):
         with self._conn:
@@ -73,45 +74,45 @@ class FileManager(ManagerInterface):
     def get_items(self):
         with self._conn:
             cur = self._conn.cursor()
-            cur.execute("""SELECT d.id, d.title, d.size
+            cur.execute("""SELECT d.*
                            FROM dirs_path AS dp
                            LEFT JOIN dirs AS d ON dp.descendant = d.id
                            WHERE dp.direct = 1 and dp.ancestor = {}""".format(str(self.base)))
             dirs = cur.fetchall()
-            cur.execute("""SELECT n.id, n.title, n.size, n.full_path, n.pub_date, n.mod_date, n.real_title
-                           FROM notes AS n
-                           WHERE n.dir_id = {}""".format(self.base))
+            cur.execute("""SELECT *
+                           FROM notes
+                           WHERE dir_id = {}""".format(self.base))
             notes = cur.fetchall()
-            return [DirItem(t[0], title=t[1], path=t[1], size=t[2]) for t in dirs] + \
-                   sorted([NoteItem(t[0], title=t[1], size=t[2], path=t[3], pub_date=t[4], mod_date=t[5], real_title=t[6]) for t in notes], key=lambda i: i.pub_date, reverse=True)
+            return [DirItem(dir[0], dir) for dir in dirs] + \
+                   sorted([NoteItem(note[0], note) for note in notes], key=lambda i: i.pub_date, reverse=True)
 
 
 class TagManager(ManagerInterface):
     def __init__(self, dbpath):
         self._conn = sqlite3.connect(dbpath)
+        self._conn.row_factory = sqlite3.Row
         self.base = None            # None means root
         self.last_tag = None
 
     def get_items(self):
-        def get_size(tag_id):
-            cur.execute("""SELECT COUNT(*)
-                        FROM note_tags
-                        WHERE tag_id = {}""".format(tag_id))
-            return int(cur.fetchone()[0])
-
         with self._conn:
             cur = self._conn.cursor()
             if self.base is None:
-                cur.execute("SELECT id, title FROM tags")
+                cur.execute("""SELECT t.id, t.title, COUNT(t.title) AS size
+                               FROM tags AS t
+                               JOIN note_tags AS nt
+                               ON (t.id = nt.tag_id)
+                               GROUP BY t.title""")
                 rows = cur.fetchall()
-                return sorted([TagItem(t[0], title=t[1], size=get_size(t[0])) for t in rows], key=lambda i: i.get_size(), reverse=True)
-            # else
-            cur.execute("""SELECT n.id, n.title, n.real_title, n.full_path, n.pub_date, n.mod_date, n.size FROM notes AS n
-                           JOIN note_tags AS nt ON (nt.note_id = n.id)
-                           JOIN tags as t ON (nt.tag_id = t.id)
-                           WHERE t.id = {}""".format(self.base))
-            rows = cur.fetchall()
-            return sorted([NoteItem(t[0], title=t[1], real_title=t[2], path=t[3], pub_date=t[4], mod_date=t[5], size=t[6]) for t in rows], key=lambda i: i.pub_date, reverse=True)
+                return sorted([TagItem(tag[0], tag) for tag in rows], key=lambda i: i.get_size(), reverse=True)
+            else:
+                cur.execute("""SELECT n.*
+                               FROM notes AS n
+                               JOIN note_tags AS nt ON (nt.note_id = n.id)
+                               JOIN tags as t ON (nt.tag_id = t.id)
+                               WHERE t.id = {}""".format(self.base))
+                rows = cur.fetchall()
+                return sorted([NoteItem(row[0], row) for row in rows], key=lambda i: i.pub_date, reverse=True)
 
     def root(self):
         self.chpath(None)
@@ -131,17 +132,38 @@ class TagManager(ManagerInterface):
 class AllManager(ManagerInterface):
     def __init__(self, dbpath):
         self._conn = sqlite3.connect(dbpath)
+        self._conn.row_factory = sqlite3.Row
         self.base = None
 
     def get_items(self):
         with self._conn:
             cur = self._conn.cursor()
-            cur.execute("SELECT id, title, full_path, pub_date, mod_date, size, real_title FROM notes")
+            cur.execute("SELECT * FROM notes")
             rows = cur.fetchall()
-            return sorted([NoteItem(t[0], title=t[1], path=t[2], pub_date=t[3], mod_date=t[4], size=t[5], real_title=t[6]) for t in rows], key=lambda i: i.pub_date, reverse=True)
+            return sorted([NoteItem(row[0], row) for row in rows], key=lambda i: i.pub_date, reverse=True)
 
     def root(self): pass
 
     def parent(self): pass
 
-    def chpath(self, tag): pass
+    def chpath(self, path): pass
+
+
+class FavoritesManager(ManagerInterface):
+    def __init__(self, dbpath):
+        self._conn = sqlite3.connect(dbpath)
+        self._conn.row_factory = sqlite3.Row
+        self.base = None
+
+    def get_items(self):
+        with self._conn:
+            cur = self._conn.cursor()
+            cur.execute("SELECT * FROM notes WHERE favorite=1")
+            rows = cur.fetchall()
+            return sorted([NoteItem(row[0], row) for row in rows], key=lambda i: i.pub_date, reverse=True)
+
+    def root(self): pass
+
+    def parent(self): pass
+
+    def chpath(self, path): pass

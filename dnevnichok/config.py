@@ -68,7 +68,8 @@ class Config:
             self.config.read(self.configpath)
 
     def get_path(self, path):
-        return self.config.get('Path', path, fallback=self.default_paths[path]())
+        path = self.config.get('Paths', path, fallback=self.default_paths[path]())
+        return abspath(expanduser(path))
 
     def get_configpath(self):
         """ Try to get $XDG_CONFIG_HOME or fallback to ~/.config """
@@ -115,7 +116,7 @@ class Config:
 
     def get(self, section, option, fallback):
         """ Fallback method """
-        return self.config(section, option, fallback=fallback)
+        return self.config.get(section, option, fallback=fallback)
 
 
 config = Config()

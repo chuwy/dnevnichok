@@ -1,6 +1,5 @@
 from datetime import datetime
 import curses
-import os
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,28 +12,27 @@ class ItemInterface:
     Now also responsible for navigating
     id = DB pk or another way to 100% identify object and thus navigate to it
          by manager and also get all info. Single required arg
-    title = will be named almost everywhere
-    path? = used by chpath() in managers if id isn't appropriate
-    name_  = filename if need
-    size!
-    color
+    All other will be setted as attributes
     """
-    def __init__(self, item_id, **kwargs):
+    def __init__(self, item_id, kwargs):
         self.id = item_id
-        self.__dict__.update(kwargs)
-
-    def get_view(self):
-        return (self.title, self.get_size())
+        kwargs = dict(kwargs) if kwargs else {}
+        attrs = { col: kwargs.get(col, None) for col in self.columns }
+        self.__dict__.update(attrs)
 
     def get_color(self): return 1
-    def __repr__(self): return self.category + ' ' + self.title
+    def get_view(self): return self.title, self.get_size()
+    def get_size(self): return 0
     def __eq__(self, other):
-        if self.category != other.category: return False
+        if self.__class__ != other.__class__: return False
         return self.id == other.id
 
 
 class TagItem(ItemInterface):
-    category = 'tag'
+    columns = ('title', 'size',)
+
+    def __init__(self, item_id, kwargs=None):
+        super().__init__(item_id, kwargs)
 
     def get_size(self):
         return self.size
@@ -47,7 +45,12 @@ class TagItem(ItemInterface):
 
 
 class DirItem(ItemInterface):
-    category = 'dir'
+    columns = ('title', 'size',)
+
+    def __init__(self, dir_id, kwargs=None):
+        super().__init__(dir_id, kwargs)
+        if kwargs:
+            self.path = self.title
 
     def get_size(self):
         return self.size
@@ -60,15 +63,18 @@ class DirItem(ItemInterface):
 
 
 class NoteItem(ItemInterface):
-    category = 'note'
+    columns = ('title', 'real_title', 'full_path', 'pub_date', 'mod_date', 'size', 'dir_id', 'favorite',)
 
-    def __init__(self, item_id, **kwargs):
-        super().__init__(item_id, **kwargs)
-        if not self.real_title and self.title.find('diary_') >= 0:
-            try:
-                self.title = datetime.strptime(self.title, 'diary_%d-%m-%Y.rst').strftime('Дневничок от %d %B %Y')
-            except ValueError:
-                pass
+    def __init__(self, item_id, kwargs=None):
+        self.favorite = False
+        super().__init__(item_id, kwargs)
+        if kwargs:
+            self.path = self.full_path       #TODO: set full_path everywhere!!!!11
+            if not self.real_title and self.title.find('diary_') >= 0:      # too
+                try:
+                    self.title = datetime.strptime(self.title, 'diary_%d-%m-%Y.rst').strftime('Дневничок от %d %B %Y')
+                except ValueError:
+                    pass
 
     def get_size(self):
         return self.size
@@ -80,7 +86,9 @@ class NoteItem(ItemInterface):
             return self.path
 
     def get_color(self):
-        if self.real_title:
+        if self.favorite:
+            return 6
+        elif self.real_title:
             return 3
         else:
             return 4
@@ -102,22 +110,5 @@ class NoteItem(ItemInterface):
 
 
 class DateItem(ItemInterface):
-    category = 'date'
-
     def __init__(self, date_id):
         date = datetime.strptime(date_id, '%Y-%m-%dT%H:%M:%S.%fZ')
-
-
-def Item(path, hint=None):
-    """
-    Item factory function. Decides which category current item belongs.
-    If item match no criteria it returns None and can be considered to filter
-    out this item.
-    """
-    if hint:
-        if hint == 'tag':   return TagItem(path)
-        if hint == 'dir':   return DirItem(path)
-        if hint == 'date':  return DateItem(path)
-        if hint == 'note':  return NoteItem(path)
-
-    return DirItem(path)

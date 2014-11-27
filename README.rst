@@ -32,6 +32,7 @@ Keybindings
 ``t`` show tags
 ``a`` show all notes
 ``f`` show dirs
+``F`` show favorites
 ``q`` quit
 ===== ==============
 
