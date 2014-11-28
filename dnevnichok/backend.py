@@ -35,6 +35,7 @@ class GitCommandBackend:
         )
         proc = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
         stat = proc.stdout.read().decode('UTF-8').strip().split('\n')
+        if len(stat) == 1 and stat[0] == '': return
         for line in stat:
             stat, note = line.strip().split()
             self.status.update({note: stat})

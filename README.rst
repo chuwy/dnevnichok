@@ -12,11 +12,14 @@ Features
 
 + Navigating through directories with notes
 + Tagging: add ``:tags:`` field list with tags separated with commas and they'll appear in DB in the next repopulation
++ Favorites: add empty ``:favorite:`` field list.
 + Notes saved with date of add to repo (``git log -1 --format="%ad" --date=iso --diff-filter=A -- mynote.rst``) and last modification (``git log -1 --format="%ad" --date=iso  -- mynote.rst``)
 + Search by file name with ``/``
 
 Usage
 ~~~~~
+
+On first launch it will ask you about path to your notes. It must be a git repository with your reStructuredText notes.
 
 Keybindings
 ------------
@@ -41,7 +44,7 @@ Keybindings
 Requirements
 ~~~~~~~~~~~~
 
-+ Python 3.4 (I think it should work with versions below, but I didn't tested yet)
++ Python 3.4. I think it should work with 3.3 and 3.2, but I didn't tested.
 + docutils
 
 That's all. Stay tuned.
@@ -54,7 +57,7 @@ ToDo List
 + New note
 + Full-text search (grep)
 + Pull & Push to git
-+ Show git status somewhere
++ Show git status somewhere [X]
 + Sorting: size, date, name
 + Refactor
 + Prettify [X]
