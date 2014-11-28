@@ -1,12 +1,20 @@
+import logging
 from os.path import join
 import subprocess
+
+from dnevnichok.config import Config
+
+logger = logging.getLogger(__name__)
+config = Config()
+
 
 class GitCommandBackend:
     """
     Gives some information about file or whole repo
     """
     def __init__(self, path=None):
-        self.path = path
+        self.path = path if path else config.get_path('notes')
+        self.status = dict()
 
     def get_file_mod_date(self, file_path):
         command = 'git log -1 --format="%ad" --date=iso -- ' + join(self.path, file_path)
@@ -19,3 +27,11 @@ class GitCommandBackend:
         proc = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
         date = proc.stdout.read()
         return date.decode('UTF-8').strip()
+
+    def check_status(self):
+        command = 'git status --short -- ' + self.path
+        proc = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
+        stat = proc.stdout.read().decode('UTF-8').strip().split('\n')
+        for line in stat:
+            stat, note = line.strip().split()
+            self.status.update({note: stat})
