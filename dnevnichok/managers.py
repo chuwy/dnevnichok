@@ -8,10 +8,23 @@ from collections import deque
 import logging
 import sqlite3
 
+from dnevnichok.backend import GitCommandBackend
 from dnevnichok.core import DirItem, NoteItem, TagItem
 
-
 logger = logging.getLogger(__name__)
+
+
+backend = GitCommandBackend()
+backend.check_status()
+
+def add_status(row):
+    """ Helper function for NoteItems """
+    item_dict = dict(row)
+    if 'full_path' in item_dict:
+        path = item_dict['full_path'][2:]
+        stat = backend.status.get(path, '')
+        item_dict.update({'status': stat})
+    return item_dict
 
 
 class ManagerInterface:
@@ -84,7 +97,7 @@ class FileManager(ManagerInterface):
                            WHERE dir_id = {}""".format(self.base))
             notes = cur.fetchall()
             return [DirItem(dir[0], dir) for dir in dirs] + \
-                   sorted([NoteItem(note[0], note) for note in notes], key=lambda i: i.pub_date, reverse=True)
+                   sorted([NoteItem(note[0], add_status(note)) for note in notes], key=lambda i: i.pub_date, reverse=True)
 
 
 class TagManager(ManagerInterface):
@@ -111,8 +124,8 @@ class TagManager(ManagerInterface):
                                JOIN note_tags AS nt ON (nt.note_id = n.id)
                                JOIN tags as t ON (nt.tag_id = t.id)
                                WHERE t.id = {}""".format(self.base))
-                rows = cur.fetchall()
-                return sorted([NoteItem(row[0], row) for row in rows], key=lambda i: i.pub_date, reverse=True)
+                notes = cur.fetchall()
+                return sorted([NoteItem(note[0], add_status(note)) for note in notes], key=lambda i: i.pub_date, reverse=True)
 
     def root(self):
         self.chpath(None)
@@ -140,7 +153,7 @@ class AllManager(ManagerInterface):
             cur = self._conn.cursor()
             cur.execute("SELECT * FROM notes")
             rows = cur.fetchall()
-            return sorted([NoteItem(row[0], row) for row in rows], key=lambda i: i.pub_date, reverse=True)
+            return sorted([NoteItem(row[0], add_status(row)) for row in rows], key=lambda i: i.pub_date, reverse=True)
 
     def root(self): pass
 
@@ -160,7 +173,7 @@ class FavoritesManager(ManagerInterface):
             cur = self._conn.cursor()
             cur.execute("SELECT * FROM notes WHERE favorite=1")
             rows = cur.fetchall()
-            return sorted([NoteItem(row[0], row) for row in rows], key=lambda i: i.pub_date, reverse=True)
+            return sorted([NoteItem(row[0], add_status(row)) for row in rows], key=lambda i: i.pub_date, reverse=True)
 
     def root(self): pass
 

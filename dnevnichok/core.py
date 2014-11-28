@@ -21,7 +21,7 @@ class ItemInterface:
         self.__dict__.update(attrs)
 
     def get_color(self): return 1
-    def get_view(self): return self.title, self.get_size()
+    def get_view(self): return self.title, '', self.get_size()
     def get_size(self): return 0
     def __eq__(self, other):
         if self.__class__ != other.__class__: return False
@@ -63,7 +63,7 @@ class DirItem(ItemInterface):
 
 
 class NoteItem(ItemInterface):
-    columns = ('title', 'real_title', 'full_path', 'pub_date', 'mod_date', 'size', 'dir_id', 'favorite',)
+    columns = ('title', 'real_title', 'full_path', 'pub_date', 'mod_date', 'size', 'dir_id', 'favorite', 'status',)
 
     def __init__(self, item_id, kwargs=None):
         self.favorite = False
@@ -106,7 +106,7 @@ class NoteItem(ItemInterface):
         return date.strftime('%d %b %y')
 
     def get_view(self):
-        return (self.title, self.get_mod_date())
+        return (self.title, self.status, self.get_mod_date(),)
 
 
 class DateItem(ItemInterface):

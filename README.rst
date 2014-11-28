@@ -57,4 +57,4 @@ ToDo List
 + Show git status somewhere
 + Sorting: size, date, name
 + Refactor
-+ Prettify
++ Prettify [X]

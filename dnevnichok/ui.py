@@ -1,6 +1,9 @@
 import curses
+import logging
 
 from dnevnichok.aux import PagedItems, EventQueue
+
+logger = logging.getLogger(__name__)
 
 
 def polute(text, width, begin=True):
@@ -43,7 +46,9 @@ class ItemList:
 
     def render_item(self, position, item, reverse=False):
         def render_view(view):
-            return polute(view[0], self.width-13, False) + polute(view[1], 12)[:self.width]
+            return polute(view[0], self.width-16, False) + \
+                   polute(view[1], 3) + \
+                   polute(view[2], 12)[:self.width]
         view = item.get_view()
         if reverse:
             color = curses.color_pair(item.get_color()+12)
