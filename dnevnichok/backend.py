@@ -12,8 +12,10 @@ class GitCommandBackend:
     """
     Gives some information about file or whole repo
     """
+    __shared_state = {}
 
     def __init__(self, path=None):
+        self.__dict__ = self.__shared_state
         self.path = path if path else config.get_path('notes')
         self.status = dict()
 
@@ -36,6 +38,8 @@ class GitCommandBackend:
         proc = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
         stat = proc.stdout.read().decode('UTF-8').strip().split('\n')
         if len(stat) == 1 and stat[0] == '': return
+        new_status = {}
         for line in stat:
             stat, note = line.strip().split()
-            self.status.update({note: stat})
+            new_status.update({note: stat})
+        self.status = new_status

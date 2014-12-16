@@ -85,6 +85,7 @@ class FileManager(ManagerInterface):
         self.base = path
 
     def get_items(self):
+        backend.check_status()
         with self._conn:
             cur = self._conn.cursor()
             cur.execute("""SELECT d.*
@@ -108,6 +109,7 @@ class TagManager(ManagerInterface):
         self.last_tag = None
 
     def get_items(self):
+        backend.check_status()
         with self._conn:
             cur = self._conn.cursor()
             if self.base is None:
@@ -149,11 +151,12 @@ class AllManager(ManagerInterface):
         self.base = None
 
     def get_items(self):
+        backend.check_status()
         with self._conn:
             cur = self._conn.cursor()
             cur.execute("SELECT * FROM notes")
             rows = cur.fetchall()
-            return sorted([NoteItem(row[0], add_status(row)) for row in rows], key=lambda i: i.pub_date, reverse=True)
+            return sorted([NoteItem(row[0], add_status(row)) for row in rows], key=lambda i: i.mod_date, reverse=True)
 
     def root(self): pass
 
