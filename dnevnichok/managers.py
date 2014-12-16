@@ -98,7 +98,7 @@ class FileManager(ManagerInterface):
                            WHERE dir_id = {}""".format(self.base))
             notes = cur.fetchall()
             return [DirItem(dir[0], dir) for dir in dirs] + \
-                   sorted([NoteItem(note[0], add_status(note)) for note in notes], key=lambda i: i.pub_date, reverse=True)
+                   sorted([NoteItem(note[0], add_status(note)) for note in notes], key=lambda i: i.pub_date if i.pub_date else 'Z', reverse=True)
 
 
 class TagManager(ManagerInterface):
@@ -127,7 +127,7 @@ class TagManager(ManagerInterface):
                                JOIN tags as t ON (nt.tag_id = t.id)
                                WHERE t.id = {}""".format(self.base))
                 notes = cur.fetchall()
-                return sorted([NoteItem(note[0], add_status(note)) for note in notes], key=lambda i: i.pub_date, reverse=True)
+                return sorted([NoteItem(note[0], add_status(note)) for note in notes], key=lambda i: i.pub_date if i.pub_date else 'Z', reverse=True)
 
     def root(self):
         self.chpath(None)
@@ -156,7 +156,8 @@ class AllManager(ManagerInterface):
             cur = self._conn.cursor()
             cur.execute("SELECT * FROM notes")
             rows = cur.fetchall()
-            return sorted([NoteItem(row[0], add_status(row)) for row in rows], key=lambda i: i.mod_date, reverse=True)
+            logger.warn(type(rows[5]['mod_date']))
+            return sorted([NoteItem(row[0], add_status(row)) for row in rows], key=lambda i: i.mod_date if i.mod_date else 'Z', reverse=True)
 
     def root(self): pass
 
@@ -176,7 +177,7 @@ class FavoritesManager(ManagerInterface):
             cur = self._conn.cursor()
             cur.execute("SELECT * FROM notes WHERE favorite=1")
             rows = cur.fetchall()
-            return sorted([NoteItem(row[0], add_status(row)) for row in rows], key=lambda i: i.pub_date, reverse=True)
+            return sorted([NoteItem(row[0], add_status(row)) for row in rows], key=lambda i: i.pub_date if i.pub_date else 'Z', reverse=True)
 
     def root(self): pass
 
