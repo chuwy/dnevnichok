@@ -15,14 +15,15 @@ logger = logging.getLogger(__name__)
 
 
 backend = GitCommandBackend()
-backend.check_status()
+backend.update_statuses()
+
 
 def add_status(row):
     """ Helper function for NoteItems """
     item_dict = dict(row)
     if 'full_path' in item_dict:
         path = item_dict['full_path'][2:]
-        stat = backend.status.get(path, '')
+        stat = backend.notes_status.get(path, '')
         item_dict.update({'status': stat})
     return item_dict
 
@@ -85,7 +86,7 @@ class FileManager(ManagerInterface):
         self.base = path
 
     def get_items(self):
-        backend.check_status()
+        backend.update_statuses()
         with self._conn:
             cur = self._conn.cursor()
             cur.execute("""SELECT d.*
@@ -109,7 +110,7 @@ class TagManager(ManagerInterface):
         self.last_tag = None
 
     def get_items(self):
-        backend.check_status()
+        backend.update_statuses()
         with self._conn:
             cur = self._conn.cursor()
             if self.base is None:
@@ -151,12 +152,11 @@ class AllManager(ManagerInterface):
         self.base = None
 
     def get_items(self):
-        backend.check_status()
+        backend.update_statuses()
         with self._conn:
             cur = self._conn.cursor()
             cur.execute("SELECT * FROM notes")
             rows = cur.fetchall()
-            logger.warn(type(rows[5]['mod_date']))
             return sorted([NoteItem(row[0], add_status(row)) for row in rows], key=lambda i: i.mod_date if i.mod_date else 'Z', reverse=True)
 
     def root(self): pass

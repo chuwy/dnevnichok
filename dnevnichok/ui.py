@@ -2,8 +2,11 @@ import curses
 import logging
 
 from dnevnichok.aux import PagedItems, EventQueue
+from dnevnichok.backend import GitCommandBackend
 
 logger = logging.getLogger(__name__)
+
+backend = GitCommandBackend()
 
 
 def polute(text, width, begin=True):
@@ -143,10 +146,14 @@ class InfoBar:
         self.Y = height - 2
 
     def render_item_info(self, item):
+        repo_status = ''
+        for s in backend.repo_status:
+            repo_status += '%s ' % s
         remain = self.width - 32
         self.print(polute(item.get_path(), 30, False) +
                    polute(' ', 2) +
-                   polute(item.get_size(), remain))
+                   polute(item.get_size(), 10) +
+                   polute(repo_status, remain-len(repo_status)-4))
 
     def print(self, text):
         if text:
