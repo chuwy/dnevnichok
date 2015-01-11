@@ -5,15 +5,20 @@ Application itself decides when to switch over managers.
 """
 
 from collections import deque
+import curses
+import inspect
 import logging
 import sqlite3
+import subprocess
+import sys
 
 from dnevnichok.backend import GitCommandBackend
 from dnevnichok.core import DirItem, NoteItem, TagItem
+from dnevnichok.config import config
+from dnevnichok.events import event_hub
 
 logger = logging.getLogger(__name__)
-
-
+dbpath = config.get_path('db')
 backend = GitCommandBackend()
 backend.update_statuses()
 
@@ -29,6 +34,10 @@ def add_status(row):
 
 
 class ManagerInterface:
+    _conn = sqlite3.connect(dbpath)
+    _conn.row_factory = sqlite3.Row
+    base = None
+
     def chpath(self, path):
         """
         Return none. Just changes current state
@@ -41,11 +50,39 @@ class ManagerInterface:
         """
         raise NotImplemented
 
+    def process_parent(self):
+        last_active = self.parent()
+        if not last_active:
+            return
+        item = TagItem(last_active) if isinstance(self, TagManager) else DirItem(last_active)
+        items = self.get_items()
+        last_active_index = items.index(item)
+        event_hub.trigger(('show', items, last_active_index))
+
+    def process_root(self):
+        items = self.get_items()
+        event_hub.trigger(('show', items))
+
+    def process_open(self, item):
+        active = None
+        if isinstance(item, (DirItem, TagItem,)):
+            self.chpath(item.id)
+        elif isinstance(item, NoteItem):
+            subprocess.call(["vi", item.get_path()])
+            active = item
+            curses.curs_set(1)  # THIS is sought-for hack
+            curses.curs_set(0)
+
+        items = self.get_items()
+        last_active_index = items.index(active) if active else 0
+        event_hub.trigger(('show', items, last_active_index))
+
 
 class FileManager(ManagerInterface):
-    def __init__(self, root_path, dbpath):
-        self._conn = sqlite3.connect(dbpath)
-        self._conn.row_factory = sqlite3.Row
+    key = 'f'
+
+    def __init__(self):
+        root_path = 1
         self._bases = deque()
         self.root_path = root_path
         self.base = root_path
@@ -103,10 +140,9 @@ class FileManager(ManagerInterface):
 
 
 class TagManager(ManagerInterface):
-    def __init__(self, dbpath):
-        self._conn = sqlite3.connect(dbpath)
-        self._conn.row_factory = sqlite3.Row
-        self.base = None            # None means root
+    key = 't'
+
+    def __init__(self):
         self.last_tag = None
 
     def get_items(self):
@@ -146,10 +182,7 @@ class TagManager(ManagerInterface):
 
 
 class AllManager(ManagerInterface):
-    def __init__(self, dbpath):
-        self._conn = sqlite3.connect(dbpath)
-        self._conn.row_factory = sqlite3.Row
-        self.base = None
+    key = 'a'
 
     def get_items(self):
         backend.update_statuses()
@@ -167,10 +200,7 @@ class AllManager(ManagerInterface):
 
 
 class FavoritesManager(ManagerInterface):
-    def __init__(self, dbpath):
-        self._conn = sqlite3.connect(dbpath)
-        self._conn.row_factory = sqlite3.Row
-        self.base = None
+    key = 'F'
 
     def get_items(self):
         with self._conn:
@@ -184,3 +214,62 @@ class FavoritesManager(ManagerInterface):
     def parent(self): pass
 
     def chpath(self, path): pass
+
+
+class ManagerHub:
+    """
+    Responsible for switch active managers, load third-party managers
+    """
+    def __init__(self):
+        self.manager_names = {} # {'tag': tag_manager}
+        self.manager_keys = {}  # {'t': 'tag'}
+        self.managers = self._get_builtin_managers()
+
+        for name, klass in self.managers.items():
+            if klass.key in self.manager_keys:
+                logger.warning("Key {} was already assigned to {}".format(klass.key, str(self.manager_keys[klass.key])))
+
+            self.manager_names[name] = klass()
+            self.manager_keys[klass.key] = name
+
+        self._active = self.get_default_active()
+
+        event_hub.register('root', lambda: self.active.process_root)
+        event_hub.register('open', lambda e: self.active.process_open(e))
+        event_hub.register('parent', lambda: self.active.process_parent())
+
+    @property
+    def active(self) -> ManagerInterface:
+        return self.manager_names[self._active]
+
+    def _get_builtin_managers(self) -> dict:
+        managers = {}
+        for name, obj in inspect.getmembers(sys.modules[__name__]):
+            if inspect.isclass(obj):
+                if len(name) > 7 and name.endswith('Manager'):
+                    managers.update({name[:-7].lower(): obj})
+        return managers
+
+    def _set_active(self, name: str):
+        self._active = name
+
+    def get_default_active(self) -> str:
+        return 'all' if 'all' in self.manager_names else self.manager_names.keys()[0]
+
+    def tied_to_manager(self, key: str) -> bool:
+        return key in self.manager_keys.keys()
+
+    def switch_by_key(self, key: str):
+        try:
+            name = self.manager_keys[key]
+        except KeyError:
+            logger.debug("Tried to switch manager with {} key".format(str(key)))
+        else:
+            self.switch_by_name(name)
+
+    def switch_by_name(self, name: str):
+        if name in self.manager_names:
+            self._set_active(name)
+            self.active.process_root()
+        else:
+            logger.error("Unexisting manager: {}".format(str(name)))

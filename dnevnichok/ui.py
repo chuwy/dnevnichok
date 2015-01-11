@@ -1,8 +1,9 @@
 import curses
 import logging
 
-from dnevnichok.aux import PagedItems, EventQueue
+from dnevnichok.aux import PagedItems
 from dnevnichok.backend import GitCommandBackend
+from dnevnichok.events import event_hub
 
 logger = logging.getLogger(__name__)
 
@@ -125,10 +126,10 @@ class ItemList:
             else: return False
         elif type(c) is str:
             if c in 'lд':
-                EventQueue.push(('open', self._items[self.cur_item],))
+                event_hub.trigger(('open', self._items[self.cur_item],))
             if c in 'hр':
-                EventQueue.push(('parent',))
-            elif c in 'kл':         # Movements
+                event_hub.trigger(('parent',))
+            elif c in 'kл':
                 self.move(-1)
             elif c in 'jо':
                 self.move(1)
@@ -149,11 +150,14 @@ class InfoBar:
         repo_status = ''
         for s in backend.repo_status:
             repo_status += '%s ' % s
-        remain = self.width - 32
-        self.print(polute(item.get_path(), 30, False) +
-                   polute(' ', 2) +
-                   polute(item.get_size(), 10) +
-                   polute(repo_status, remain-len(repo_status)-4))
+        path_length = self.width // 3 if self.width > 60 else 20
+        size_length = 10
+        remain = self.width - (path_length + 2 + size_length)
+
+        self.print(polute(item.get_path(), path_length, False) +
+                   polute(' ',             2) +
+                   polute(item.get_size(), size_length) +
+                   polute(repo_status,     remain))
 
     def print(self, text):
         if text:
@@ -199,6 +203,10 @@ class MainWindow:
         self.left_pane = ItemList(subwin)
         self.left_pane.on_hightlight(func=self.bar.render_item_info)
 
+        event_hub.register('print', self.print)
+        event_hub.register('key-press', self.left_pane.process_keypress)
+        event_hub.register('show', self.show_items)
+
     def print(self, text):
         self.bar.print(text)
 
@@ -211,9 +219,6 @@ class MainWindow:
     def show_items(self, items, cur_item=0):
         self.left_pane.switch_items(items, cur_item)
         self.left_pane.render()
-
-    def process_keypress(self, c):
-        return self.left_pane.process_keypress(c)
 
     def get_current_item(self):
         return self.left_pane.get_current_item()

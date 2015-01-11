@@ -1,4 +1,4 @@
-from collections import UserList, deque
+from collections import UserList
 
 
 class PagedItems(UserList):
@@ -35,18 +35,3 @@ class PagedItems(UserList):
 
     def has_prev(self):
         return self.page > 1
-
-
-class EventQueue:
-    eventqueue = deque()
-
-    @classmethod
-    def pop(cls):
-        try:
-            return cls.eventqueue.popleft()
-        except IndexError:
-            return '',
-
-    @classmethod
-    def push(cls, event):
-        cls.eventqueue.append(event)

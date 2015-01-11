@@ -5,20 +5,16 @@ import os
 import sys
 import locale
 import logging
-import subprocess
 
-from dnevnichok.aux import EventQueue
-from dnevnichok.core import NoteItem, DirItem, TagItem
 from dnevnichok.commands import get_all_commands, InsufficientArguments
 from dnevnichok.config import Config, setup_logging
-from dnevnichok.managers import AllManager, FavoritesManager, FileManager, TagManager
+from dnevnichok.events import event_hub
+from dnevnichok.managers import ManagerHub
 from dnevnichok.populate import repopulate_db
 from dnevnichok.ui import MainWindow
 
-
 locale.setlocale(locale.LC_ALL, '')
 code = locale.getpreferredencoding()
-
 config = Config()
 
 try:
@@ -37,26 +33,23 @@ class Executor:
         self.app = app
         self.commands = get_all_commands()
 
-    def run_command(self, command):
+    def run_command(self, command: str):
         command, *args = command.split()
         try:
-            Command = self.commands[command]
+            CommandClass = self.commands[command]
         except KeyError:
-            self.print("Unknown command: " + command)
+            event_hub.trigger(('print', "Unknown command: " + command))
             return
 
         try:
-            execution = Command(self, args)
+            execution = CommandClass(self, args)
         except InsufficientArguments as e:
-            self.print(e.message)
+            event_hub.trigger(('print', e.message))
             return
 
-        execution.fill_args()
         proceed = execution.ensure()
         if proceed:
-            output = execution.run()
-            if output:
-                self.print(output)
+            execution.run()
 
     def ensure(self, text, tries=0):
         choice = self.app.window.input(text)
@@ -65,16 +58,13 @@ class Executor:
         elif choice in 'nN':
             return False
         elif tries > 3:
-            self.app.window.print("Ok. Just have a good day")
+            event_hub.trigger(('print', "Ok. Just have a good day"))
             return False
         else:
             return self.ensure(text, tries+1)
 
     def get_current_item(self):
         return self.app.window.get_current_item()
-
-    def print(self, message):
-        self.app.print(message)
 
 
 class App:
@@ -87,115 +77,66 @@ class App:
             repopulate_db()
 
         self.executor = Executor(self)
-        self.file_manager = FileManager(1, dbpath)
-        self.tag_manager = TagManager(dbpath)
-        self.all_manager = AllManager(dbpath)
-        self.favorites_manager = FavoritesManager(dbpath)
-        self.manager = self.all_manager        # current manager
-        items = self.manager.get_items()
+        self.manager_hub = ManagerHub()
+        items = self.manager_hub.active.get_items()
         self.window = MainWindow(stdscr)
         self.window.show_items(items)
-        self.processors = {'open': self.process_open,
-                           'root': self.process_root,
-                           'reload': self.process_reload,
-                           'parent': self.process_parent}
-        self.loop()
+        self.keystack = []   # for gg (move to first element) and numerical
 
-    def loop(self):
-        while True:
-            ev = EventQueue.pop()
-            self.process_event(ev)
-            c = self.window.stdscr.get_wch()
+        event_hub.register('key-press', self.process_keypress)
+        event_hub.register('exit', self.exit)
 
-            self.window.clear_bar()
-            if not self.window.process_keypress(c):
-                signal = self.process_keypress(c)
-                if signal == 'exit':
-                    break
+        self._running = False
+        self.run_forever()
 
-    # Event-processing part
-    def process_event(self, e):
-        if e[0]: self.processors[e[0]](e)
-
-    def process_parent(self, ev):
-        last_active = self.manager.parent()
-        if not last_active:
-            return
-        item = TagItem(last_active) if self.manager is self.tag_manager else DirItem(last_active)
-        items = self.manager.get_items()
-        last_active_index = items.index(item)
-        self.window.show_items(items, last_active_index)
-
-    def process_open(self, ev):
-        item = ev[1]
-        if isinstance(item, (DirItem, TagItem,)):
-            self.manager.chpath(item.id)
-            active = None
-        elif isinstance(item, NoteItem):
-            subprocess.call(["vi", item.get_path()])
-            active = item
-            curses.curs_set(1)  # THIS is sought-for hack
-            curses.curs_set(0)
-
-        items = self.manager.get_items()
-        last_active_index = items.index(active) if active else 0
-        self.window.show_items(items, last_active_index)
-
-    def process_root(self, event):
-        items = self.manager.get_items()
-        self.window.show_items(items)
-
-    def process_reload(self, event):
-        active_item = self.window.get_current_item()
-        items = self.manager.get_items()
-        try:
-            last_active_index = items.index(active_item)
-        except ValueError:  #   it's deleted
-            last_active_index = len(items) - 1
-        self.window.show_items(items, last_active_index)
+    def run_forever(self):
+        self._running = True
+        while self._running:
+            try:
+                c = self.window.stdscr.get_wch()
+            except KeyboardInterrupt:
+                event_hub.trigger(('exit',))
+            else:
+                self.window.clear_bar()
+                event_hub.trigger(('key-press', c))
 
     def process_keypress(self, c):
-        """ May return a text signal to mainloop """
         if type(c) is not str:
             return
-        if c in 'QqЙй': return 'exit'
-        elif c in 'Rr':
-            repopulate_db()
-            EventQueue.push(('reload',))
-        elif self.switch_manager(c): return
-        elif c in '/':      # TODO: rewrite as filter command
-            search = self.window.input('/ ')
-            new_items = list(filter(lambda q: q.title.find(search) >= 0, self.manager.get_items()))
-            count = len(new_items)
-            if count > 0:
-                self.window.show_items(new_items)
-                self.window.print("{} items found".format(count))
+
+        def filter_items(query):
+            items = self.manager_hub.active.get_items()
+            return [item for item in items if item.title.find(query) > -1]
+
+        if not self.keystack:
+            if c in 'QqЙй': event_hub.trigger(('exit',))
+            elif c in 'Rr':
+                repopulate_db()
+            elif c in '/':
+                query = self.window.input('/ ')
+                event_hub.trigger(('show', filter_items(query)))
+            elif c in ':':
+                command = self.window.input(': ')
+                self.executor.run_command(command)
+            elif c in 'gп' or c.isnumeric():
+                self.keystack.append(c)
+            elif self.manager_hub.tied_to_manager(c):
+                self.manager_hub.switch_by_key(c)
+        else:
+            if c in 'gп':
+                if self.keystack[0] in 'gп':
+                    self.window.left_pane.move_to(0)
+                if self.keystack[-1].isnumeric():
+                    elem_num = ''.join(self.keystack)
+                    self.window.left_pane.move_to(int(elem_num)-1)
+            if c.isnumeric():
+                self.keystack.append(c)
             else:
-                self.window.print("Nothing found")
-        elif c in ':':
-            command = self.window.input(': ')
-            self.executor.run_command(command)
+                self.keystack = []
 
-    def switch_manager(self, key):
-        if key in 'f':
-            if self.manager is self.file_manager: return
-            self.manager = self.file_manager
-        elif key in 'a':
-            if self.manager is self.all_manager: return
-            self.manager = self.all_manager
-        elif key in 't':
-            if self.manager is self.tag_manager: return
-            self.manager = self.tag_manager
-        elif key in 'F':
-            if self.manager is self.favorites_manager: return
-            self.manager = self.favorites_manager
-        else: return False
+    def exit(self):
+        self._running = False
 
-        EventQueue.push(('root',))
-        return True
-
-    def print(self, text):
-        self.window.print(text)
 
 if __name__ == '__main__':
     setup_logging()

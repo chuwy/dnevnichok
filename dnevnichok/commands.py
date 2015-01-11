@@ -4,8 +4,8 @@ import sqlite3
 import inspect
 import logging
 
-from dnevnichok.aux import EventQueue
 from dnevnichok.config import Config
+from dnevnichok.events import event_hub
 from dnevnichok.populate import parse_note
 
 
@@ -20,14 +20,14 @@ class InsufficientArguments(Exception):
 
 
 class Command:
+    def __init__(self, executor, args: tuple):
+        pass
+
     def ensure(self):
         return True     # Most commands do not need confirmation
 
     def input_args(self):
         pass
-
-    def fill_args(self):
-        self.item = self.executor.get_current_item()
 
 
 class deleteCommand(Command):
@@ -46,11 +46,11 @@ class deleteCommand(Command):
             with self.conn:
                 cur = self.conn.cursor()
                 cur.execute('DELETE FROM notes WHERE id = {}'.format(self.item.id))
-                EventQueue.push(('reload',))
+                event_hub.trigger(('reload',))
 
 
 class newCommand(Command):
-    def __init__(self, executor, args):
+    def __init__(self, executor, args: tuple):
         self.executor = executor
         self.conn = sqlite3.connect(dbpath)
 
@@ -58,9 +58,6 @@ class newCommand(Command):
             self.item_title = args[0]
         except IndexError:
             raise InsufficientArguments(1)
-
-    def fill_args(self):
-        self.executor.app.file_manager
 
     def run(self):
         dir_id = self.executor.app.file_manager.base
@@ -73,16 +70,19 @@ class newCommand(Command):
             with self.conn:
                 cur = self.conn.cursor()
                 cur.execute("""INSERT INTO notes(title, real_title, full_path, pub_date, mod_date, size, dir_id)
-                            VALUES(?, ?, ?, ?, ?, ?, ?)""",
+                               VALUES(?, ?, ?, ?, ?, ?, ?)""",
                             (note.get_title(), note.real_title, note.path, note.pub_date, note.mod_date, note.get_size(), note.dir_id))
                 note.id = cur.lastrowid
                 for tag in note.tags:
                     cur.execute("INSERT OR IGNORE INTO tags(title) VALUES(?)", (tag,))
                     cur.execute("INSERT INTO note_tags(note_id, tag_id) VALUES(?, ?)", (note.id, cur.lastrowid,))
-                EventQueue.push(('reload',))
+                event_hub.trigger(('reload',))
 
 
-def get_all_commands():
+def get_all_commands() -> dict:
+    """
+    Returns all classes from this module which ends with `Command`
+    """
     commands = {}
     for name, obj in inspect.getmembers(sys.modules[__name__]):
         if inspect.isclass(obj):

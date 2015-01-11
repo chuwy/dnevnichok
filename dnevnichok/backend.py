@@ -37,9 +37,11 @@ class GitCommandBackend:
         stat = set()
         for status in statuses:
             if 'M' in status:
-                stat.add('✓')
+                stat.add('✱')
             if 'A' in status:
-                stat.add('*')
+                stat.add('✚')
+            if 'D' in status:
+                stat.add('✖')
             if '?' in status:
                 stat.add('◼')
         self.repo_status = stat
