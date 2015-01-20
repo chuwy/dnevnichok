@@ -160,12 +160,14 @@ class InfoBar:
                    polute(repo_status,     remain))
 
     def print(self, text):
+        blank = self.width - len(text)
         if text:
-            self.scr.addstr(self.Y, 0, str(text), curses.color_pair(20))
+            self.scr.addstr(self.Y, 0, str(text) + (' '*blank), curses.color_pair(20))
 
     def input(self, prompt=''):
-        curses.echo()
         self.print(prompt)
+        curses.echo()
+        self.scr.attrset(curses.color_pair(20))
         input = self.scr.getstr(self.Y, len(prompt), 40).decode('unicode_escape')
         curses.noecho()
         self.clear()

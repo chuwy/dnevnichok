@@ -36,7 +36,7 @@ def add_status(row):
 class ManagerInterface:
     _conn = sqlite3.connect(dbpath)
     _conn.row_factory = sqlite3.Row
-    base = None
+    base = None     # where we now
 
     def chpath(self, path):
         """
@@ -100,6 +100,23 @@ class FileManager(ManagerInterface):
             parents = map(lambda p: p[0], cur.fetchall())
             path = '/'.join(parents)
             return path
+
+    def get_path_id(self, path: str):
+        path = [p for p in path.split('/') if len(p) > 0 and p != '.']
+        if len(path) == 1:
+            with self._conn:
+                cur = self._conn.cursor()
+                cur.execute("""SELECT id FROM dirs WHERE title = '{}'""".format(path[0]))
+                id = cur.fetchone()['id']
+            return id
+        else:
+            with self._conn:
+                logger.error("Implement path find ({})".format(str(path)))
+                cur = self._conn.cursor()
+                cur.execute("""SELECT id FROM dirs WHERE title = '{}'""".format(path))
+                id = cur.fetchone()['id']
+            return id
+
 
     def root(self):
         self.chpath(self.root_path)
@@ -223,20 +240,23 @@ class ManagerHub:
     def __init__(self):
         self.manager_names = {} # {'tag': tag_manager}
         self.manager_keys = {}  # {'t': 'tag'}
-        self.managers = self._get_builtin_managers()
+        self.managers = self._get_builtin_managers() # {'tag': TagManager}
 
         for name, klass in self.managers.items():
             if klass.key in self.manager_keys:
                 logger.warning("Key {} was already assigned to {}".format(klass.key, str(self.manager_keys[klass.key])))
-
             self.manager_names[name] = klass()
             self.manager_keys[klass.key] = name
-
         self._active = self.get_default_active()
 
         event_hub.register('root', lambda: self.active.process_root)
         event_hub.register('open', lambda e: self.active.process_open(e))
         event_hub.register('parent', lambda: self.active.process_parent())
+        event_hub.register('reload', lambda: self.reload())
+
+    def reload(self):
+        items = self.active.get_items()
+        event_hub.trigger(('show', items))
 
     @property
     def active(self) -> ManagerInterface:
@@ -273,3 +293,12 @@ class ManagerHub:
             self.active.process_root()
         else:
             logger.error("Unexisting manager: {}".format(str(name)))
+
+    def get_current_dir(self) -> str:
+        """
+        Return current dir (may be should based on current item path?)
+        """
+        return self.manager_names['file'].get_current_path()
+
+    def get_path_id(self, path: str):
+        return self.manager_names['file'].get_path_id(path)

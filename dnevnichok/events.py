@@ -2,6 +2,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# For some moment it seemed that for synchronous TUI app it would be enough to have such event system
+# I was wrong, it's very cumbersome to handle all these event and need to refactor
+# For now here are all app events:
+# reload - get all items to manager and sequently fire `show items`
+# show - show passed items in window
+
 
 class EventHub:
     """ Primitive borg observable """

@@ -6,7 +6,7 @@ import sys
 import locale
 import logging
 
-from dnevnichok.commands import get_all_commands, InsufficientArguments
+from dnevnichok.commands import Executor
 from dnevnichok.config import Config, setup_logging
 from dnevnichok.events import event_hub
 from dnevnichok.managers import ManagerHub
@@ -22,49 +22,6 @@ try:
     colored_traceback.add_hook()
 except ImportError:
     pass
-
-
-class Executor:
-    """
-    Responsible for take find all available commands, pick right one and
-    give it everything it needs. Also stores history.
-    """
-    def __init__(self, app):
-        self.app = app
-        self.commands = get_all_commands()
-
-    def run_command(self, command: str):
-        command, *args = command.split()
-        try:
-            CommandClass = self.commands[command]
-        except KeyError:
-            event_hub.trigger(('print', "Unknown command: " + command))
-            return
-
-        try:
-            execution = CommandClass(self, args)
-        except InsufficientArguments as e:
-            event_hub.trigger(('print', e.message))
-            return
-
-        proceed = execution.ensure()
-        if proceed:
-            execution.run()
-
-    def ensure(self, text, tries=0):
-        choice = self.app.window.input(text)
-        if choice in 'yY':
-            return True
-        elif choice in 'nN':
-            return False
-        elif tries > 3:
-            event_hub.trigger(('print', "Ok. Just have a good day"))
-            return False
-        else:
-            return self.ensure(text, tries+1)
-
-    def get_current_item(self):
-        return self.app.window.get_current_item()
 
 
 class App:
@@ -112,14 +69,23 @@ class App:
             if c in 'QqЙй': event_hub.trigger(('exit',))
             elif c in 'Rr':
                 repopulate_db()
+                event_hub.trigger(('reload',))
             elif c in '/':
                 query = self.window.input('/ ')
                 event_hub.trigger(('show', filter_items(query)))
             elif c in ':':
-                command = self.window.input(': ')
+                command = self.window.input(':')
                 self.executor.run_command(command)
             elif c in 'gп' or c.isnumeric():
                 self.keystack.append(c)
+            elif c in 'NТ':
+                from datetime import datetime
+                date = datetime.today().strftime("%d-%m-%Y")
+                self.executor.run_command('new diary_{}.rst diary'.format(date))
+            elif c in 'DВ':
+                self.executor.run_command('delete ' + self.window.get_current_item().get_path())
+            elif c in 'c':
+                self.executor.run_command('commit')
             elif self.manager_hub.tied_to_manager(c):
                 self.manager_hub.switch_by_key(c)
         else:
