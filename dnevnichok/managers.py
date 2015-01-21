@@ -16,6 +16,7 @@ from dnevnichok.backend import GitCommandBackend
 from dnevnichok.core import DirItem, NoteItem, TagItem
 from dnevnichok.config import config
 from dnevnichok.events import event_hub
+from dnevnichok.populate import repopulate_db
 
 logger = logging.getLogger(__name__)
 dbpath = config.get_path('db')
@@ -43,7 +44,12 @@ class ManagerInterface:
         Return none. Just changes current state
         """
         raise NotImplemented
-    def get_items(self): raise NotImplemented
+    def get_items(self) -> list:
+        """
+        Return list of dnevnichok.core.Items
+        """
+        raise NotImplemented
+
     def parent(self):
         """
         Return None if we can't go parent or directory from where we moving out
@@ -255,7 +261,7 @@ class ManagerHub:
         event_hub.register('reload', lambda: self.reload())
 
     def reload(self):
-        items = self.active.get_items()
+        items = self.get_items()
         event_hub.trigger(('show', items))
 
     @property
@@ -302,3 +308,14 @@ class ManagerHub:
 
     def get_path_id(self, path: str):
         return self.manager_names['file'].get_path_id(path)
+
+    def get_items(self):
+        try:
+            items = self.active.get_items()
+        except sqlite3.OperationalError:
+            logger.info("It seems DB didn't existed. Try to repopulate.")
+            print("It seems DB didn't existed. Populating... It may take some time.")
+            repopulate_db()
+            items = self.active.get_items()
+        return items
+

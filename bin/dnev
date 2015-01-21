@@ -35,7 +35,7 @@ class App:
 
         self.executor = Executor(self)
         self.manager_hub = ManagerHub()
-        items = self.manager_hub.active.get_items()
+        items = self.manager_hub.get_items()
         self.window = MainWindow(stdscr)
         self.window.show_items(items)
         self.keystack = []   # for gg (move to first element) and numerical
