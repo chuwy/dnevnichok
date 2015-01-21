@@ -54,10 +54,10 @@ ToDo List
 ~~~~~~~~~
 
 + MonthManager
-+ New note
++ New note [X]
 + Full-text search (grep)
 + Pull & Push to git
 + Show git status somewhere [X]
 + Sorting: size, date, name
-+ Refactor
++ Refactor [X]
 + Prettify [X]

@@ -32,6 +32,14 @@ class Command:
         pass
 
 
+class quitCommand(Command):
+    def __init__(self, executor, args):
+        self.executor = executor
+
+    def run(self):
+        event_hub.trigger(('exit',))
+
+
 class deleteCommand(Command):
     def __init__(self, executor, args):
         self.executor = executor
@@ -77,6 +85,7 @@ class newCommand(Command):
         self.executor = executor
         self.conn = sqlite3.connect(dbpath)
         self.path = None
+        self.content = ''
 
         args_num = len(args)
         if args_num == 0:
@@ -85,6 +94,7 @@ class newCommand(Command):
             self.item_title = args[0] if args[0].endswith('.rst') else args[0] + '.rst'
         if args_num > 1:
             self.path = args[1]
+            self.content = ':tags: diary'
 
     def run(self):
         base_path = self.executor.app.manager_hub.get_current_dir() if not self.path else self.path
@@ -93,7 +103,8 @@ class newCommand(Command):
         if os.path.exists(note_path):
             event_hub.trigger(('print', 'File {} already exists'.format(note_path)))
             return
-        os.system('touch ' + note_path)
+        os.system('touch {}'.format(note_path))
+        os.system('echo "{}" >> {}'.format(self.content, note_path))
         exit_code = os.system('vi ' + note_path)
         if exit_code == 0:
             note = parse_note(note_path, dir_id)
