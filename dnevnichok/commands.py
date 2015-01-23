@@ -40,6 +40,16 @@ class quitCommand(Command):
         event_hub.trigger(('exit',))
 
 
+class updateCommand(Command):
+    def __init__(self, executor, args):
+        self.executor = executor
+
+    def run(self):
+        os.system('git pull')
+        os.system('git push --porcelain')
+        event_hub.trigger(('reload',))
+
+
 class deleteCommand(Command):
     def __init__(self, executor, args):
         self.executor = executor

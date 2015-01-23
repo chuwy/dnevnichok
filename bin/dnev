@@ -83,7 +83,9 @@ class App:
                 date = datetime.today().strftime("%d-%m-%Y")
                 self.executor.run_command('new diary_{}.rst diary'.format(date))
             elif c in 'DВ':
-                self.executor.run_command('delete ' + self.window.get_current_item().get_path())
+                self.executor.run_command('delete')
+            elif c in 'uг':
+                self.executor.run_command('update')
             elif c in 'c':
                 self.executor.run_command('commit')
             elif self.manager_hub.tied_to_manager(c):
