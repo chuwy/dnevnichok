@@ -1,5 +1,4 @@
 from datetime import datetime
-import curses
 import logging
 
 logger = logging.getLogger(__name__)

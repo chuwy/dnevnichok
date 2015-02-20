@@ -74,7 +74,7 @@ class ManagerInterface:
         if isinstance(item, (DirItem, TagItem,)):
             self.chpath(item.id)
         elif isinstance(item, NoteItem):
-            subprocess.call(["vi", item.get_path()])
+            subprocess.call(["vim", item.get_path()])
             active = item
             curses.curs_set(1)  # THIS is sought-for hack
             curses.curs_set(0)

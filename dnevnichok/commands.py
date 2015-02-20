@@ -115,7 +115,7 @@ class newCommand(Command):
             return
         os.system('touch {}'.format(note_path))
         os.system('echo "{}" >> {}'.format(self.content, note_path))
-        exit_code = os.system('vi ' + note_path)
+        exit_code = os.system('vim ' + note_path)
         if exit_code == 0:
             note = parse_note(note_path, dir_id)
             with self.conn:
@@ -128,9 +128,9 @@ class newCommand(Command):
                     cur.execute("INSERT OR IGNORE INTO tags(title) VALUES(?)", (tag,))
                     cur.execute("INSERT INTO note_tags(note_id, tag_id) VALUES(?, ?)", (note.id, cur.lastrowid,))
 
-            event_hub.trigger(('reload',))
-            curses.curs_set(1)  # THIS is sought-for hack
-            curses.curs_set(0)
+        event_hub.trigger(('reload',))
+        curses.curs_set(1)  # THIS is sought-for hack
+        curses.curs_set(0)
 
 
 def get_all_commands() -> dict:
