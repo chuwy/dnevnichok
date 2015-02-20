@@ -127,12 +127,13 @@ class newCommand(Command):
         os.system('echo "{}" >> {}'.format(self.content, note_path))
         exit_code = os.system('vim ' + note_path)
         if exit_code == 0:
+            git.add(note_path)
             note = parse_note(note_path, dir_id)
             with self.conn:
                 cur = self.conn.cursor()
-                cur.execute("""INSERT INTO notes(title, real_title, full_path, pub_date, mod_date, size, dir_id)
-                               VALUES(?, ?, ?, ?, ?, ?, ?)""",
-                            (note.get_title(), note.real_title, note.path, note.pub_date, note.mod_date, note.get_size(), note.dir_id))
+                cur.execute("""INSERT INTO notes(title, real_title, full_path, pub_date, mod_date, size, dir_id, favorite)
+                               VALUES(?, ?, ?, ?, ?, ?, ?, ?)""",
+                            (note.get_title(), note.real_title, note.path, note.pub_date, note.mod_date, note.get_size(), note.dir_id, note.favorite))
                 note.id = cur.lastrowid
                 for tag in note.tags:
                     cur.execute("INSERT OR IGNORE INTO tags(title) VALUES(?)", (tag,))

@@ -27,8 +27,6 @@ class EventHub:
 
     def trigger(self, event: tuple):
         event_name = event[0]
-        if event_name != 'show':
-            logger.info("Trigger executed with " + str(event))
         if event_name in self._handlers:
             for handler in self._handlers[event_name]:
                 handler(*event[1:])

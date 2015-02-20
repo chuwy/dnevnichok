@@ -47,15 +47,22 @@ class GitCommandBackend:
                 stat.add('◼')
         self.repo_status = stat
 
+    def add(self, path):
+        command = 'git --git-dir={} --work-tree={} add {}'.format(
+            join(self.path, '.git'), self.path, path
+        )
+        subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
+        self.update_statuses()
+
     def update_statuses(self):
         command = 'git --git-dir={} --work-tree={} status --short'.format(
             join(self.path, '.git'), self.path
         )
         proc = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
         stat = proc.stdout.read().decode('UTF-8').strip().split('\n')
-        if len(stat) == 1 and stat[0] == '': return
         new_status = {}
         for line in stat:
+            if line == '': continue
             stat, note = line.strip().split()
             new_status.update({note: stat})
         self.notes_status = new_status
