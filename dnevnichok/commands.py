@@ -5,6 +5,7 @@ import sqlite3
 import inspect
 import logging
 
+from dnevnichok.backend import GitCommandBackend
 from dnevnichok.config import Config
 from dnevnichok.core import NoteItem, TagItem
 from dnevnichok.events import event_hub
@@ -12,6 +13,7 @@ from dnevnichok.populate import parse_note
 
 
 config = Config()
+git = GitCommandBackend()
 dbpath = config.get_path('db')
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,14 @@ class quitCommand(Command):
     def __init__(self, executor, args):
         self.executor = executor
 
+    def ensure(self):
+        if git.repo_status:
+            return self.executor.ensure("You have some uncommited changed. "
+                                        "Do you really want to exit? [Y/n] ",
+                                        default=True)
+        else:
+            return True
+
     def run(self):
         event_hub.trigger(('exit',))
 
@@ -54,11 +64,11 @@ class deleteCommand(Command):
     def __init__(self, executor, args):
         self.executor = executor
         self.conn = sqlite3.connect(dbpath)
-
         self.item = self.executor.app.window.get_current_item()
 
     def ensure(self):
-        return self.executor.ensure('Are you sure you want to delete {}? [y/N]  '.format(self.item.get_path()))
+        return self.executor.ensure('Are you sure you want to delete {}? [y/N] '.format(self.item.get_path()),
+                                    default=False)
 
     def run(self):
         table = None
@@ -134,9 +144,7 @@ class newCommand(Command):
 
 
 def get_all_commands() -> dict:
-    """
-    Returns all classes from this module which ends with `Command`
-    """
+    """Returns all classes from this module which ends with `Command`"""
     commands = {}
     for name, obj in inspect.getmembers(sys.modules[__name__]):
         if inspect.isclass(obj):
@@ -146,8 +154,7 @@ def get_all_commands() -> dict:
 
 
 class Executor:
-    """
-    Responsible for take find all available commands, pick right one and
+    """Responsible for take find all available commands, pick right one and
     give it everything it needs. Also stores history.
     """
     def __init__(self, app):
@@ -172,17 +179,17 @@ class Executor:
         if proceed:
             execution.run()
 
-    def ensure(self, text, tries=0):
-        choice = self.app.window.input(text)
-        if choice in 'yY':
+    def ensure(self, text, default=True):
+        choice = self.app.window.input(text).lower()
+        if choice == 'y':
             return True
-        elif choice in 'nN':
+        elif choice == 'n':
             return False
-        elif tries > 3:
-            event_hub.trigger(('print', "Ok. Just have a good day"))
-            return False
+        elif not choice:
+            return default
         else:
-            return self.ensure(text, tries+1)
+            event_hub.trigger(('print', "Just yes or no"))
+            return False
 
     def get_current_item(self):
         return self.app.window.get_current_item()

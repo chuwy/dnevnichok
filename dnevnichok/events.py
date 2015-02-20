@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 # For now here are all app events:
 # reload - get all items to manager and sequently fire `show items`
 # show - show passed items in window
+# print - print something to status bar
 
 
 class EventHub:

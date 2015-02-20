@@ -16,9 +16,10 @@ class GitCommandBackend:
 
     def __init__(self, path=None):
         self.__dict__ = self.__shared_state
-        self.path = path if path else config.get_path('notes')
-        self.notes_status = dict()
-        self.repo_status = set()
+        if not self.__shared_state:
+            self.path = path if path else config.get_path('notes')
+            self.notes_status = dict()
+            self.repo_status = set()
 
     def get_file_mod_date(self, file_path):
         command = 'git log -1 --format="%ad" --date=iso -- ' + join(self.path, file_path)
