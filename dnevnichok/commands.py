@@ -163,11 +163,13 @@ class Executor:
         self.commands = get_all_commands()
 
     def run_command(self, command: str):
-        command, *args = command.split()
         try:
+            command, *args = command.split()
             CommandClass = self.commands[command]
         except KeyError:
             event_hub.trigger(('print', "Unknown command: " + command))
+            return
+        except ValueError:  # No command at all
             return
 
         try:

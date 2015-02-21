@@ -34,6 +34,10 @@ def add_status(row):
     return item_dict
 
 
+class EmptyManagerException(Exception):
+    pass
+
+
 class ManagerInterface:
     _conn = sqlite3.connect(dbpath)
     _conn.row_factory = sqlite3.Row
@@ -153,6 +157,7 @@ class FileManager(ManagerInterface):
                            FROM notes
                            WHERE dir_id = {}""".format(self.base))
             notes = cur.fetchall()
+
             return [DirItem(dir[0], dir) for dir in dirs] + \
                    sorted([NoteItem(note[0], add_status(note)) for note in notes],
                           key=lambda i: i.pub_date if i.pub_date else 'Z',
@@ -240,6 +245,8 @@ class ModifiedManager(ManagerInterface):
             cur = self._conn.cursor()
             cur.execute("SELECT * FROM notes WHERE full_path IN ({})".format(placeholders), modified_notes_paths)
             rows = cur.fetchall()
+            if not rows:
+                raise EmptyManagerException
             return sorted([NoteItem(row[0], add_status(row)) for row in rows],
                           key=lambda i: i.pub_date if i.pub_date else 'Z',
                           reverse=True)
@@ -283,6 +290,7 @@ class ManagerHub:
         return managers
 
     def _set_active(self, name: str):
+        self._previous = self._active
         self._active = name
 
     def get_default_active(self) -> str:
@@ -302,7 +310,11 @@ class ManagerHub:
     def switch_by_name(self, name: str):
         if name in self.manager_names:
             self._set_active(name)
-            self.active.process_root()
+            try:
+                self.active.process_root()
+            except EmptyManagerException:
+                self.switch_by_name(self._previous)
+                event_hub.trigger(('print', 'Empty manager'))
         else:
             logger.error("Unexisting manager: {}".format(str(name)))
 
