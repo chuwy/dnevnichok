@@ -38,13 +38,13 @@ class GitCommandBackend:
         stat = set()
         for status in statuses:
             if 'M' in status:
-                stat.add('✱')
+                stat.add('M')
             if 'A' in status:
-                stat.add('✚')
+                stat.add('A')
             if 'D' in status:
-                stat.add('✖')
+                stat.add('D')
             if '?' in status:
-                stat.add('◼')
+                stat.add('?')
         self.repo_status = stat
 
     def add(self, path):
