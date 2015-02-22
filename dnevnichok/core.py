@@ -68,7 +68,7 @@ class NoteItem(ItemInterface):
 
     def __init__(self, item_id, kwargs=None, tags=None):
         self.favorite = False
-        self.tags = tags
+        self.tags = tags if tags else []
         super().__init__(item_id, kwargs)
         if kwargs:
             self.path = self.full_path       #TODO: set full_path everywhere!!!!11

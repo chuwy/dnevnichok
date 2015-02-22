@@ -90,11 +90,12 @@ class ManagerInterface:
                                JOIN note_tags AS nt ON (t.id = nt.tag_id)
                                JOIN notes AS n ON (n.id = nt.note_id)
                                WHERE n.id = {}""".format(id))
-            tags = [tag['title'] for tag in cur.fetchall()]
+            tags = sorted([tag['title'] for tag in cur.fetchall()])
             return tags
 
     def get_items(self) -> list:
         """Return list of dnevnichok.core.Items"""
+        backend.update_statuses()
         self.fetch_items()
         return sorted([NoteItem(row[0], add_git_status(row), tags=self.get_tags(row[0])) for row in self._notes],
                       key=lambda i: i.pub_date if i.pub_date else 'Z',
@@ -141,7 +142,6 @@ class FileManager(ManagerInterface):
                 id = cur.fetchone()['id']
             return id
 
-
     def root(self):
         self.chpath(self.root_path)
 
@@ -165,13 +165,9 @@ class FileManager(ManagerInterface):
 
     def get_items(self):
         self.fetch_items()
-        return [DirItem(dir[0], dir) for dir in self._dirs] + \
-               sorted([NoteItem(note[0], add_git_status(note)) for note in self._notes],
-                      key=lambda i: i.pub_date if i.pub_date else 'Z',
-                      reverse=True)
+        return [DirItem(dir[0], dir) for dir in self._dirs] + super().get_items()
 
     def fetch_items(self):
-        backend.update_statuses()
         with self._conn:
             cur = self._conn.cursor()
             cur.execute("""SELECT d.*
@@ -193,7 +189,6 @@ class TagManager(ManagerInterface):
         self.last_tag = None
 
     def fetch_items(self):
-        backend.update_statuses()
         with self._conn:
             cur = self._conn.cursor()
             if self.base is None:
@@ -218,7 +213,7 @@ class TagManager(ManagerInterface):
                           key=lambda i: i.get_size(),
                           reverse=True)
         else:
-            return super(TagManager).get_items()
+            return super().get_items()
 
     def root(self):
         self.chpath(None)
@@ -239,7 +234,6 @@ class AllManager(ManagerInterface):
     key = 'a'
 
     def fetch_items(self):
-        backend.update_statuses()
         with self._conn:
             cur = self._conn.cursor()
             cur.execute("SELECT * FROM notes")
