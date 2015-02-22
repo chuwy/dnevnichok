@@ -2,6 +2,7 @@ import curses
 import logging
 
 from dnevnichok.aux import PagedItems
+from dnevnichok.core import ItemInterface
 from dnevnichok.backend import GitCommandBackend
 from dnevnichok.events import event_hub
 
@@ -48,18 +49,19 @@ class ItemList:
             elif i >= self.Y: break
             else: self.render_item(i, item)
 
+    def get_rendered_view(self, view: tuple) -> str:
+        return polute(view[0], self.width-16, False) + \
+               polute(view[1], 3) + \
+               polute(view[2], 12)[:self.width]
+
     def render_item(self, position, item, reverse=False):
-        def render_view(view):
-            return polute(view[0], self.width-16, False) + \
-                   polute(view[1], 3) + \
-                   polute(view[2], 12)[:self.width]
         view = item.get_view()
         if reverse:
             color = curses.color_pair(item.get_color()+12)
         else:
             color = curses.color_pair(item.get_color())
-        self.scr.addstr(position, 0, render_view(view), color)
         self.on_hightlight(item=item)
+        self.scr.addstr(position, 0, self.get_rendered_view(view), color)
 
         self.scr.refresh()
 
@@ -104,8 +106,7 @@ class ItemList:
         self.cur_item = i
 
     def on_hightlight(self, func=None, item=None):
-        """
-        With func argument it adds a callback. With item it sequentally run
+        """ With func argument it adds a callback. With item it sequentally run
         every added callback.
         """
         if func:
@@ -146,17 +147,25 @@ class InfoBar:
         height, self.width = self.scr.getmaxyx()
         self.Y = height - 2
 
-    def render_item_info(self, item):
+    def render_item_info(self, item: ItemInterface):
         repo_status = ''
         for s in backend.repo_status:
             repo_status += '%s ' % s
+        info = item.get_auxinfo()
         path_length = self.width // 3 if self.width > 60 else 20
         size_length = 10
-        remain = self.width - (path_length + 2 + size_length)
+        info_length = len(info)
+        remain = self.width - (path_length + 2 + size_length + 2 + info_length + 2)
+
+        if remain < 0:  # cut info
+            info_length += remain
+            remain = 1
 
         self.print(polute(item.get_path(), path_length, False) +
                    polute(' ',             2) +
                    polute(item.get_size(), size_length) +
+                   polute(' ',             2) +
+                   polute(info,            info_length) +
                    polute(repo_status,     remain))
 
     def print(self, text):

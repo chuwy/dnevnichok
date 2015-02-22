@@ -20,7 +20,9 @@ class ItemInterface:
         self.__dict__.update(attrs)
 
     def get_color(self): return 1
-    def get_view(self): return self.title, '', self.get_size()
+    def get_auxinfo(self) -> str: return ''
+    def get_view(self): return self.title, '', self.get_size(), self.get_auxinfo()
+    def get_path(self) -> str : raise NotImplemented
     def get_size(self): return 0
     def __eq__(self, other):
         if self.__class__ != other.__class__: return False
@@ -64,8 +66,9 @@ class DirItem(ItemInterface):
 class NoteItem(ItemInterface):
     columns = ('title', 'real_title', 'full_path', 'pub_date', 'mod_date', 'size', 'dir_id', 'favorite', 'status',)
 
-    def __init__(self, item_id, kwargs=None):
+    def __init__(self, item_id, kwargs=None, tags=None):
         self.favorite = False
+        self.tags = tags
         super().__init__(item_id, kwargs)
         if kwargs:
             self.path = self.full_path       #TODO: set full_path everywhere!!!!11
@@ -104,7 +107,12 @@ class NoteItem(ItemInterface):
         except ValueError: return ''
         return date.strftime('%d %b %y')
 
+    def get_auxinfo(self):
+        return ', '.join(self.tags)
+
     def get_view(self):
+        """ View is tuple responsible to display item in ItemList """
+
         return (self.title, self.status, self.get_mod_date(),)
 
 

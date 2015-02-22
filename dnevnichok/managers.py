@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 from dnevnichok.backend import GitCommandBackend
-from dnevnichok.core import DirItem, NoteItem, TagItem
+from dnevnichok.core import DirItem, NoteItem, TagItem, ItemInterface
 from dnevnichok.config import config
 from dnevnichok.events import event_hub
 from dnevnichok.populate import repopulate_db
@@ -24,7 +24,7 @@ backend = GitCommandBackend()
 backend.update_statuses()
 
 
-def add_status(row):
+def add_git_status(row: sqlite3.Row):
     """ Helper function for NoteItems """
     item_dict = dict(row)
     if 'full_path' in item_dict:
@@ -41,14 +41,14 @@ class EmptyManagerException(Exception):
 class ManagerInterface:
     _conn = sqlite3.connect(dbpath)
     _conn.row_factory = sqlite3.Row
+    _notes = []
     base = None     # where we now
 
     def chpath(self, path):
         """Return none. Just changes current state"""
         pass
 
-    def get_items(self) -> list:
-        """Return list of dnevnichok.core.Items"""
+    def fetch_items(self) -> None:
         pass
 
     def parent(self):
@@ -82,12 +82,31 @@ class ManagerInterface:
         last_active_index = items.index(active) if active else 0
         event_hub.trigger(('show', items, last_active_index))
 
+    def get_tags(self, id: int):
+        with self._conn:
+            cur = self._conn.cursor()
+            cur.execute("""SELECT t.title
+                               FROM tags AS t
+                               JOIN note_tags AS nt ON (t.id = nt.tag_id)
+                               JOIN notes AS n ON (n.id = nt.note_id)
+                               WHERE n.id = {}""".format(id))
+            tags = [tag['title'] for tag in cur.fetchall()]
+            return tags
+
+    def get_items(self) -> list:
+        """Return list of dnevnichok.core.Items"""
+        self.fetch_items()
+        return sorted([NoteItem(row[0], add_git_status(row), tags=self.get_tags(row[0])) for row in self._notes],
+                      key=lambda i: i.pub_date if i.pub_date else 'Z',
+                      reverse=True)
+
 
 class FileManager(ManagerInterface):
     key = 'f'
 
     def __init__(self):
         root_path = 1
+        self._dirs = []
         self._bases = deque()
         self.root_path = root_path
         self.base = root_path
@@ -145,6 +164,13 @@ class FileManager(ManagerInterface):
         self.base = path
 
     def get_items(self):
+        self.fetch_items()
+        return [DirItem(dir[0], dir) for dir in self._dirs] + \
+               sorted([NoteItem(note[0], add_git_status(note)) for note in self._notes],
+                      key=lambda i: i.pub_date if i.pub_date else 'Z',
+                      reverse=True)
+
+    def fetch_items(self):
         backend.update_statuses()
         with self._conn:
             cur = self._conn.cursor()
@@ -152,25 +178,21 @@ class FileManager(ManagerInterface):
                            FROM dirs_path AS dp
                            LEFT JOIN dirs AS d ON dp.descendant = d.id
                            WHERE dp.direct = 1 and dp.ancestor = {}""".format(str(self.base)))
-            dirs = cur.fetchall()
+            self._dirs = cur.fetchall()
             cur.execute("""SELECT *
                            FROM notes
                            WHERE dir_id = {}""".format(self.base))
-            notes = cur.fetchall()
-
-            return [DirItem(dir[0], dir) for dir in dirs] + \
-                   sorted([NoteItem(note[0], add_status(note)) for note in notes],
-                          key=lambda i: i.pub_date if i.pub_date else 'Z',
-                          reverse=True)
+            self._notes = cur.fetchall()
 
 
 class TagManager(ManagerInterface):
     key = 't'
 
     def __init__(self):
+        self._tags = []
         self.last_tag = None
 
-    def get_items(self):
+    def fetch_items(self):
         backend.update_statuses()
         with self._conn:
             cur = self._conn.cursor()
@@ -180,18 +202,23 @@ class TagManager(ManagerInterface):
                                JOIN note_tags AS nt
                                ON (t.id = nt.tag_id)
                                GROUP BY t.title""")
-                rows = cur.fetchall()
-                return sorted([TagItem(tag[0], tag) for tag in rows], key=lambda i: i.get_size(), reverse=True)
+                self._tags = cur.fetchall()
             else:
                 cur.execute("""SELECT n.*
                                FROM notes AS n
                                JOIN note_tags AS nt ON (nt.note_id = n.id)
                                JOIN tags as t ON (nt.tag_id = t.id)
                                WHERE t.id = {}""".format(self.base))
-                notes = cur.fetchall()
-                return sorted([NoteItem(note[0], add_status(note)) for note in notes],
-                              key=lambda i: i.pub_date if i.pub_date else 'Z',
-                              reverse=True)
+                self._notes = cur.fetchall()
+
+    def get_items(self) -> list:
+        self.fetch_items()
+        if self.base is None:
+            return sorted([TagItem(tag[0], tag) for tag in self._tags],
+                          key=lambda i: i.get_size(),
+                          reverse=True)
+        else:
+            return super(TagManager).get_items()
 
     def root(self):
         self.chpath(None)
@@ -211,45 +238,36 @@ class TagManager(ManagerInterface):
 class AllManager(ManagerInterface):
     key = 'a'
 
-    def get_items(self):
+    def fetch_items(self):
         backend.update_statuses()
         with self._conn:
             cur = self._conn.cursor()
             cur.execute("SELECT * FROM notes")
-            rows = cur.fetchall()
-            return sorted([NoteItem(row[0], add_status(row)) for row in rows],
-                          key=lambda i: i.mod_date if i.mod_date else 'Z',
-                          reverse=True)
+            self._notes = cur.fetchall()
 
 
 class FavoritesManager(ManagerInterface):
     key = 'F'
 
-    def get_items(self):
+    def fetch_items(self):
         with self._conn:
             cur = self._conn.cursor()
             cur.execute("SELECT * FROM notes WHERE favorite=1")
-            rows = cur.fetchall()
-            return sorted([NoteItem(row[0], add_status(row)) for row in rows],
-                          key=lambda i: i.pub_date if i.pub_date else 'Z',
-                          reverse=True)
+            self._notes = cur.fetchall()
 
 
 class ModifiedManager(ManagerInterface):
     key = 'M'
 
-    def get_items(self):
+    def fetch_items(self):
         modified_notes_paths = ['./' + path for path in backend.notes_status.keys()]
         placeholders = ', '.join('?' for _ in modified_notes_paths)
         with self._conn:
             cur = self._conn.cursor()
             cur.execute("SELECT * FROM notes WHERE full_path IN ({})".format(placeholders), modified_notes_paths)
-            rows = cur.fetchall()
-            if not rows:
+            self._notes = cur.fetchall()
+            if not self._notes:
                 raise EmptyManagerException
-            return sorted([NoteItem(row[0], add_status(row)) for row in rows],
-                          key=lambda i: i.pub_date if i.pub_date else 'Z',
-                          reverse=True)
 
 
 class ManagerHub:
