@@ -58,9 +58,9 @@ class ItemList:
         view = item.get_view()
         if reverse:
             color = curses.color_pair(item.get_color()+12)
+            self.on_hightlight(item=item)
         else:
             color = curses.color_pair(item.get_color())
-        self.on_hightlight(item=item)
         self.scr.addstr(position, 0, self.get_rendered_view(view), color)
 
         self.scr.refresh()
