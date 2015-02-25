@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 from dnevnichok.backend import GitCommandBackend
-from dnevnichok.core import DirItem, NoteItem, TagItem, ItemInterface
+from dnevnichok.core import DirItem, MonthItem, NoteItem, TagItem
 from dnevnichok.config import config
 from dnevnichok.events import event_hub
 from dnevnichok.populate import repopulate_db
@@ -49,6 +49,7 @@ class ManagerInterface:
         pass
 
     def fetch_items(self) -> None:
+        """Fetch items from DB and store internally"""
         pass
 
     def parent(self):
@@ -59,24 +60,30 @@ class ManagerInterface:
         last_active = self.parent()
         if not last_active:
             return
-        item = TagItem(last_active) if isinstance(self, TagManager) else DirItem(last_active)
+        if isinstance(self, TagManager):
+            item = TagItem(last_active)
+        elif isinstance(self, MonthManager):
+            item = MonthItem(last_active)
+        else:
+            item = DirItem(last_active)
         items = self.get_items()
         last_active_index = items.index(item)
         event_hub.trigger(('show', items, last_active_index))
 
     def process_root(self):
+        """Called on initialization of every manager """
         items = self.get_items()
         event_hub.trigger(('show', items))
 
     def process_open(self, item):
         active = None
-        if isinstance(item, (DirItem, TagItem,)):
-            self.chpath(item.id)
-        elif isinstance(item, NoteItem):
+        if isinstance(item, NoteItem):
             subprocess.call(["vim", item.get_path()])
             active = item
             curses.curs_set(1)  # THIS is sought-for hack
             curses.curs_set(0)
+        else:
+            self.chpath(item.id)
 
         items = self.get_items()
         last_active_index = items.index(active) if active else 0
@@ -262,6 +269,54 @@ class ModifiedManager(ManagerInterface):
             self._notes = cur.fetchall()
             if not self._notes:
                 raise EmptyManagerException
+
+
+class MonthManager(ManagerInterface):
+   key = 'L'
+
+   def __init__(self):
+       self._months = []
+       self.last_month = None
+
+   def fetch_items(self):
+       with self._conn:
+           cur = self._conn.cursor()
+           if self.base is None:
+               cur.execute("""SELECT d.months AS title, count(d.months) AS size
+                              FROM notes AS n
+                              JOIN (SELECT DISTINCT strftime('%Y-%m', substr(n.pub_date, 1, 20)) AS months
+                                    FROM notes AS n) AS d
+                              ON n.pub_date LIKE d.months || '%'
+                              GROUP BY d.months""")
+               self._months = cur.fetchall()
+           else:
+               cur.execute("""SELECT n.*
+                              FROM notes AS n
+                              WHERE n.pub_date LIKE '{}' || '%'""".format(self.base))
+               self._notes = cur.fetchall()
+
+   def get_items(self) -> list:
+       self.fetch_items()
+       if self.base is None:
+           return sorted([MonthItem(month[0], month) for month in self._months],
+                         key=lambda i: i.get_path(),
+                         reverse=True)
+       else:
+           return super().get_items()
+
+   def root(self):
+       self.chpath(None)
+
+   def parent(self):
+       if self.base is None:    # we're already in the root
+           return
+       self.chpath(None)
+       last, self.last_month = self.last_month, None
+       return last
+
+   def chpath(self, month):
+       self.last_month = self.base
+       self.base = month
 
 
 class ManagerHub:

@@ -119,3 +119,27 @@ class NoteItem(ItemInterface):
 class DateItem(ItemInterface):
     def __init__(self, date_id):
         date = datetime.strptime(date_id, '%Y-%m-%dT%H:%M:%S.%fZ')
+
+
+class MonthItem(ItemInterface):
+    columns = ('title', 'size',)
+
+    def __init__(self, item_id, kwargs=None):
+        super().__init__(item_id, kwargs)
+
+    def get_title(self):
+        return datetime.strptime(self.title, '%Y-%m').strftime('%B %Y')
+
+    def get_size(self):
+        return self.size
+
+    def get_path(self):
+        return self.title
+
+    def get_color(self):
+        return 5
+
+    def get_view(self):
+        """ View is tuple responsible to display item in ItemList """
+
+        return self.get_title(), '', self.get_size(), self.get_auxinfo(),
