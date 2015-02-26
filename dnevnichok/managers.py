@@ -60,10 +60,8 @@ class ManagerInterface:
         last_active = self.parent()
         if not last_active:
             return
-        if isinstance(self, TagManager):
-            item = TagItem(last_active)
-        elif isinstance(self, MonthManager):
-            item = MonthItem(last_active)
+        if isinstance(self, CategoryManagerInterface):
+            item = self.category_class(last_active)
         else:
             item = DirItem(last_active)
         items = self.get_items()
@@ -86,39 +84,138 @@ class ManagerInterface:
             self.chpath(item.id)
 
         items = self.get_items()
-        last_active_index = items.index(active) if active else 0
+        last_active_index = items.index(active) if active and active in items else 0
         event_hub.trigger(('show', items, last_active_index))
 
     def get_tags(self, id: int):
         with self._conn:
             cur = self._conn.cursor()
             cur.execute("""SELECT t.title
-                               FROM tags AS t
-                               JOIN note_tags AS nt ON (t.id = nt.tag_id)
-                               JOIN notes AS n ON (n.id = nt.note_id)
-                               WHERE n.id = {}""".format(id))
+                           FROM tags AS t
+                           JOIN note_tags AS nt ON (t.id = nt.tag_id)
+                           JOIN notes AS n ON (n.id = nt.note_id)
+                           WHERE n.id = {}""".format(id))
             tags = sorted([tag['title'] for tag in cur.fetchall()])
             return tags
 
     def get_items(self) -> list:
-        """Return list of dnevnichok.core.Items"""
+        """Return list of dnevnichok.core.Items
+        If you wish to overload get_items() don't forget to invoke fetch_items"""
         backend.update_statuses()
         self.fetch_items()
+
         return sorted([NoteItem(row[0], add_git_status(row), tags=self.get_tags(row[0])) for row in self._notes],
                       key=lambda i: i.pub_date if i.pub_date else 'Z',
                       reverse=True)
+
+
+class OneSelectManagerInterface(ManagerInterface):
+    """ Subclasses need only to set sql statement to select necessary notes
+    and hotkey to invoke a manger
+    """
+    sql = None
+    sql_args = None
+
+    def __init__(self):
+        if not self.sql:
+            raise NotImplemented("User class should give a SQL SELECT statement")
+
+    def fetch_items(self):
+        with self._conn:
+            cur = self._conn.cursor()
+            if hasattr(self, 'update_sql'):
+                self.update_sql()
+                cur.execute(self.get_sql(), self.sql_args)
+            else:
+                cur.execute(self.get_sql())
+            self._notes = cur.fetchall()
+            if not self._notes:
+                raise EmptyManagerException
+
+    def get_sql(self) -> str:
+        return self.sql
+
+
+class CategoryManagerInterface(OneSelectManagerInterface):
+    categories = []
+    previous_category = None
+    category_sql = None
+    category_class = None
+
+    def __init__(self):
+        self.base = None                # current category
+        self.previous_category = None
+
+    def get_category_sql(self) -> str:
+        return self.category_sql
+
+    def fetch_items(self):
+        with self._conn:
+            cur = self._conn.cursor()
+            if self.base is None:
+                cur.execute(self.get_category_sql())
+                self.categories = cur.fetchall()
+            else:
+                cur.execute(self.get_sql().format(self.base))
+                self._notes = cur.fetchall()
+
+    def root(self):
+        self.chpath(None)
+
+    def parent(self):
+        if self.base is None:    # we're already in the root
+            return
+        self.chpath(None)
+        return self.previous_category
+
+    def chpath(self, goto_category):
+        self.previous_category = self.base
+        self.base = goto_category
+
+    def get_items(self) -> list:
+        """Return list of dnevnichok.core.Items
+        If you wish to overload get_items() don't forget to invoke fetch_items"""
+        backend.update_statuses()
+        self.fetch_items()
+
+        if self.base is None:
+            return sorted([self.category_class(category[0], category) for category in self.categories],
+                          key=lambda i: i.get_path(),
+                          reverse=True)
+        else:
+            return super().get_items()
+
+
+class AllManager(OneSelectManagerInterface):
+    key = 'a'
+    sql = "SELECT * FROM notes"
+
+
+class FavoritesManager(OneSelectManagerInterface):
+    key = 'F'
+    sql = "SELECT * FROM notes WHERE favorite=1"
+
+
+class ModifiedManager(OneSelectManagerInterface):
+    key = 'M'
+    sql = "SELECT * FROM notes WHERE full_path IN ({})"
+    sql_args = []
+
+    def update_sql(self):
+        self.sql_args  = ['./' + path for path in backend.notes_status.keys()]
+        placeholders = ', '.join('?' for _ in self.sql_args)
+        self.sql = ModifiedManager.sql.format(placeholders)
 
 
 class FileManager(ManagerInterface):
     key = 'f'
 
     def __init__(self):
-        root_path = 1
         self._dirs = []
         self._bases = deque()
-        self.root_path = root_path
-        self.base = root_path
-        self.chpath(root_path)
+        self.root_path = 1
+        self.base = self.root_path
+        self.chpath(self.root_path)
 
     def get_current_path(self):
         with self._conn:
@@ -188,135 +285,33 @@ class FileManager(ManagerInterface):
             self._notes = cur.fetchall()
 
 
-class TagManager(ManagerInterface):
+class MonthManager(CategoryManagerInterface):
+   key = 'm'
+   sql = """SELECT n.*
+            FROM notes AS n
+            WHERE n.pub_date LIKE '{}' || '%'"""
+   category_sql = """SELECT d.months AS title, count(d.months) AS size
+                     FROM notes AS n
+                     JOIN (SELECT DISTINCT strftime('%Y-%m', substr(n.pub_date, 1, 20)) AS months
+                           FROM notes AS n) AS d
+                     ON n.pub_date LIKE d.months || '%'
+                     GROUP BY d.months"""
+   category_class = MonthItem
+
+
+class TagManager(CategoryManagerInterface):
     key = 't'
-
-    def __init__(self):
-        self._tags = []
-        self.last_tag = None
-
-    def fetch_items(self):
-        with self._conn:
-            cur = self._conn.cursor()
-            if self.base is None:
-                cur.execute("""SELECT t.id, t.title, COUNT(t.title) AS size
-                               FROM tags AS t
-                               JOIN note_tags AS nt
-                               ON (t.id = nt.tag_id)
-                               GROUP BY t.title""")
-                self._tags = cur.fetchall()
-            else:
-                cur.execute("""SELECT n.*
-                               FROM notes AS n
-                               JOIN note_tags AS nt ON (nt.note_id = n.id)
-                               JOIN tags as t ON (nt.tag_id = t.id)
-                               WHERE t.id = {}""".format(self.base))
-                self._notes = cur.fetchall()
-
-    def get_items(self) -> list:
-        self.fetch_items()
-        if self.base is None:
-            return sorted([TagItem(tag[0], tag) for tag in self._tags],
-                          key=lambda i: i.get_size(),
-                          reverse=True)
-        else:
-            return super().get_items()
-
-    def root(self):
-        self.chpath(None)
-
-    def parent(self):
-        if self.base is None:    # we're already in the root
-            return
-        self.chpath(None)
-        last, self.last_tag = self.last_tag, None
-        return last
-
-    def chpath(self, tag):
-        self.last_tag = self.base
-        self.base = tag
-
-
-class AllManager(ManagerInterface):
-    key = 'a'
-
-    def fetch_items(self):
-        with self._conn:
-            cur = self._conn.cursor()
-            cur.execute("SELECT * FROM notes")
-            self._notes = cur.fetchall()
-
-
-class FavoritesManager(ManagerInterface):
-    key = 'F'
-
-    def fetch_items(self):
-        with self._conn:
-            cur = self._conn.cursor()
-            cur.execute("SELECT * FROM notes WHERE favorite=1")
-            self._notes = cur.fetchall()
-
-
-class ModifiedManager(ManagerInterface):
-    key = 'M'
-
-    def fetch_items(self):
-        modified_notes_paths = ['./' + path for path in backend.notes_status.keys()]
-        placeholders = ', '.join('?' for _ in modified_notes_paths)
-        with self._conn:
-            cur = self._conn.cursor()
-            cur.execute("SELECT * FROM notes WHERE full_path IN ({})".format(placeholders), modified_notes_paths)
-            self._notes = cur.fetchall()
-            if not self._notes:
-                raise EmptyManagerException
-
-
-class MonthManager(ManagerInterface):
-   key = 'L'
-
-   def __init__(self):
-       self._months = []
-       self.last_month = None
-
-   def fetch_items(self):
-       with self._conn:
-           cur = self._conn.cursor()
-           if self.base is None:
-               cur.execute("""SELECT d.months AS title, count(d.months) AS size
-                              FROM notes AS n
-                              JOIN (SELECT DISTINCT strftime('%Y-%m', substr(n.pub_date, 1, 20)) AS months
-                                    FROM notes AS n) AS d
-                              ON n.pub_date LIKE d.months || '%'
-                              GROUP BY d.months""")
-               self._months = cur.fetchall()
-           else:
-               cur.execute("""SELECT n.*
-                              FROM notes AS n
-                              WHERE n.pub_date LIKE '{}' || '%'""".format(self.base))
-               self._notes = cur.fetchall()
-
-   def get_items(self) -> list:
-       self.fetch_items()
-       if self.base is None:
-           return sorted([MonthItem(month[0], month) for month in self._months],
-                         key=lambda i: i.get_path(),
-                         reverse=True)
-       else:
-           return super().get_items()
-
-   def root(self):
-       self.chpath(None)
-
-   def parent(self):
-       if self.base is None:    # we're already in the root
-           return
-       self.chpath(None)
-       last, self.last_month = self.last_month, None
-       return last
-
-   def chpath(self, month):
-       self.last_month = self.base
-       self.base = month
+    sql = """SELECT n.*
+             FROM notes AS n
+             JOIN note_tags AS nt ON (nt.note_id = n.id)
+             JOIN tags as t ON (nt.tag_id = t.id)
+             WHERE t.id = {}"""
+    category_sql = """SELECT t.id, t.title, COUNT(t.title) AS size
+                      FROM tags AS t
+                      JOIN note_tags AS nt
+                      ON (t.id = nt.tag_id)
+                      GROUP BY t.title"""
+    category_class = TagItem
 
 
 class ManagerHub:
@@ -394,7 +389,7 @@ class ManagerHub:
     def get_path_id(self, path: str):
         return self.manager_names['file'].get_path_id(path)
 
-    def get_items(self):
+    def get_items(self) -> list:
         try:
             items = self.active.get_items()
         except sqlite3.OperationalError:
@@ -402,5 +397,7 @@ class ManagerHub:
             print("It seems DB didn't existed. Populating... It may take some time.")
             repopulate_db()
             items = self.active.get_items()
+        except EmptyManagerException:
+            self.switch_by_name(self._previous)
+            items = self.active.get_items()
         return items
-

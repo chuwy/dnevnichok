@@ -21,43 +21,49 @@ Usage
 
 On first launch it will ask you about path to your notes. It must be a git repository with your reStructuredText notes.
 
-Keybindings
+General Keys
 ------------
 
 ===== ==============
- Key   What it does
+ Key   What it does 
 ===== ==============
-``j`` down
-``k`` up
-``h`` to the parent
-``l`` open
-``r`` repopulate DB
-``t`` show tags
-``a`` show all notes
-``f`` show dirs
-``F`` show favorites
-``q`` quit
+``j`` down          
+``k`` up            
+``h`` to the parent 
+``l`` open          
+``r`` repopulate DB 
+``q`` quit          
+``N`` new diary note
 ===== ==============
 
+Managers
+--------
 
-
+===== ==============
+ Key   What it does 
+===== ==============
+``M`` Modified
+``F`` Favorites     
+``L`` Months        
+``f`` Files and dirs
+``t`` Tags          
+``a`` All           
+===== ==============
+                        
 Requirements
 ~~~~~~~~~~~~
 
-+ Python 3.4. I think it should work with 3.3 and 3.2, but I didn't tested.
-+ docutils
++ Python>=3.3          
++ docutils             
 
-That's all. Stay tuned.
-
+That's all. Stay tuned.+ Pull & Push to git
 
 ToDo List
 ~~~~~~~~~
-
-+ MonthManager
-+ New note [X]
-+ Full-text search (grep)
-+ Pull & Push to git
-+ Show git status somewhere [X]
 + Sorting: size, date, name
++ MonthManager [X]
++ New note [X]
++ Full-text search [X]
++ Show git status somewhere [X]
 + Refactor [X]
 + Prettify [X]
