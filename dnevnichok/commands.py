@@ -196,5 +196,3 @@ class Executor:
 
     def get_current_item(self):
         return self.app.window.get_current_item()
-
-

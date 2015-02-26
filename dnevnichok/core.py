@@ -78,6 +78,10 @@ class NoteItem(ItemInterface):
                 except ValueError:
                     pass
 
+    def get_content(self):
+        with open(self.full_path, 'rt') as f:
+            return f.read()
+
     def get_size(self):
         return self.size
 
@@ -114,11 +118,6 @@ class NoteItem(ItemInterface):
         """ View is tuple responsible to display item in ItemList """
 
         return (self.title, self.status, self.get_mod_date(),)
-
-
-class DateItem(ItemInterface):
-    def __init__(self, date_id):
-        date = datetime.strptime(date_id, '%Y-%m-%dT%H:%M:%S.%fZ')
 
 
 class MonthItem(ItemInterface):

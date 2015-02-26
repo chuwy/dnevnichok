@@ -9,6 +9,7 @@ import logging
 
 from dnevnichok.commands import Executor
 from dnevnichok.config import Config, setup_logging
+from dnevnichok.core import NoteItem
 from dnevnichok.events import event_hub
 from dnevnichok.managers import ManagerHub
 from dnevnichok.populate import repopulate_db
@@ -62,19 +63,39 @@ class App:
         if type(c) is not str:
             return
 
-        def filter_items(query):
-            items = self.manager_hub.active.get_items()
-            return [item for item in items if item.title.find(query) > -1]
+        def filter_items(search_query: str):
+            all_items = self.manager_hub.active.get_items()
+            def f(item):
+                if any(c.isupper() for c in search_query):   # case-sensitive
+                    if item.title.find(search_query) > -1              or \
+                        isinstance(item, NoteItem)                    and \
+                        (item.full_path.split('/')[-1].find(search_query) > -1 or
+                        item.get_content().find(search_query) > -1):
+                        return True
+                else:
+                    if item.title.lower().find(search_query) > -1       or \
+                        isinstance(item, NoteItem)                     and \
+                        (item.full_path.split('/')[-1].lower().find(search_query) > -1 or
+                        item.get_content().lower().find(search_query) > -1):
+                        return True
+                return False
+            return [item for item in all_items if f(item)]
 
         if not self.keystack:
             if c in 'QqЙй': self.executor.run_command('quit')
-            # event_hub.trigger(('exit',))
             elif c in 'Rr':
                 repopulate_db()
                 event_hub.trigger(('reload',))
             elif c in '/':
-                query = self.window.input('/ ')
-                event_hub.trigger(('show', filter_items(query)))
+                query = self.window.input('/')
+                if not query:
+                    event_hub.trigger(('print', 'You have to enter search query'))
+                else:
+                    items = filter_items(query)
+                    if items:
+                        event_hub.trigger(('show', items))
+                    else:
+                        event_hub.trigger(('print', 'Nothing matches query'))
             elif c in ':':
                 command = self.window.input(':')
                 self.executor.run_command(command)

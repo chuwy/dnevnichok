@@ -177,7 +177,7 @@ class InfoBar:
         self.print(prompt)
         curses.echo()
         self.scr.attrset(curses.color_pair(20))
-        input = self.scr.getstr(self.Y, len(prompt), 40).decode('unicode_escape')
+        input = self.scr.getstr(self.Y, len(prompt), 40).decode()
         curses.noecho()
         self.clear()
         return input
