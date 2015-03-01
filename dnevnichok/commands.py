@@ -2,6 +2,7 @@ import curses
 import os
 import sys
 import sqlite3
+import subprocess
 import inspect
 import logging
 
@@ -55,9 +56,28 @@ class updateCommand(Command):
         self.executor = executor
 
     def run(self):
-        os.system('git pull')
-        os.system('git push --porcelain')
+        commands = [['git', 'pull'], ['git', 'push', '--porcelain']]
+        pull_status = 'Pull: Updated. '
+        push_status = 'Push: Updated. '
+        for command in commands:
+            popen = subprocess.Popen(command,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.STDOUT)
+            while True:
+                line = popen.stdout.readline().decode()
+                if line.find('Already up-to-date') > -1:
+                    pull_status = 'Pull: Already up-to-date. '
+                elif line.find('error') > -1:
+                    pull_status = 'Pull: Error. '
+                    break
+                if line.find('up to date') > -1:
+                    push_status = 'Push: Already up-to-date. '
+                if not line:
+                    break
+                logger.info(command[1] + ': ' + line)
+
         event_hub.trigger(('reload',))
+        event_hub.trigger(('print', pull_status + push_status))
 
 
 class deleteCommand(Command):
