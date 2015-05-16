@@ -67,6 +67,9 @@ class updateCommand(Command):
                 line = popen.stdout.readline().decode()
                 if line.find('Already up-to-date') > -1:
                     pull_status = 'Pull: Already up-to-date. '
+                elif line.find('error') > -1:
+                    pull_status = 'Pull: Error. '
+                    break
                 if line.find('up to date') > -1:
                     push_status = 'Push: Already up-to-date. '
                 if not line:
