@@ -79,8 +79,13 @@ class NoteItem(ItemInterface):
                     pass
 
     def get_content(self):
-        with open(self.full_path, 'rt') as f:
-            return f.read()
+        try:
+            with open(self.full_path, 'rt') as f:
+                return f.read()
+        except FileNotFoundError as e:
+            logger.warning(e)
+            return ''
+
 
     def get_size(self):
         return self.size
